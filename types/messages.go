@@ -1,6 +1,8 @@
 package types
 
 import (
+	"bytes"
+	"fmt"
 	"io"
 
 	"github.com/golang/protobuf/proto"
@@ -141,6 +143,11 @@ func WriteMessage(msg proto.Message, w io.Writer) error {
 		return err
 	}
 	var n int
+	fmt.Println(bz, " : ", string(bz))
+	w2 := new(bytes.Buffer)
+	wire.WriteByteSlice(bz, w2, &n, &err)
+	b := w2.Bytes()
+	fmt.Println(b)
 	wire.WriteByteSlice(bz, w, &n, &err)
 	return err
 }

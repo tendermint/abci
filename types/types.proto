@@ -39,20 +39,20 @@ enum CodeType {
 // Request types
 
 message Request {
-            MessageType       type        = 1;
-            bytes             data        = 2;
-            string            key         = 3;
-            string            value       = 4;
+            required MessageType       type        = 1;
+            optional bytes             data        = 2;
+            optional string            key         = 3;
+            optional string            value       = 4;
 }
 
 //----------------------------------------
 // Response types
 
 message Response {
-            MessageType       type        = 1;
-            bytes             data        = 2;
-            CodeType          code        = 3;
-            string            error       = 4;
-            string            log         = 5;
+            required MessageType       type        = 1;
+            optional bytes             data        = 2;
+            optional CodeType          code        = 3;
+            optional string            error       = 4;
+            optional string            log         = 5;
 }
 
