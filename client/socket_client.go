@@ -5,6 +5,7 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"reflect"
 	"sync"
@@ -40,6 +41,8 @@ type socketClient struct {
 	err     error
 	reqSent *list.List
 	resCb   func(*types.Request, *types.Response) // listens to all callbacks
+
+	waitChan chan struct{}
 }
 
 func NewSocketClient(addr string, mustConnect bool) (*socketClient, error) {
@@ -48,17 +51,20 @@ func NewSocketClient(addr string, mustConnect bool) (*socketClient, error) {
 		flushTimer:  NewThrottleTimer("socketClient", flushThrottleMS),
 		mustConnect: mustConnect,
 
-		addr:    addr,
-		reqSent: list.New(),
-		resCb:   nil,
+		addr:     addr,
+		reqSent:  list.New(),
+		resCb:    nil,
+		waitChan: make(chan struct{}, 1),
 	}
 	cli.QuitService = *NewQuitService(nil, "socketClient", cli)
 	_, err := cli.Start() // Just start it, it's confusing for callers to remember to start.
+	<-cli.waitChan
 	return cli, err
 }
 
 func (cli *socketClient) OnStart() error {
 	cli.QuitService.OnStart()
+
 RETRY_LOOP:
 	for {
 		conn, err := Connect(cli.addr)
@@ -73,6 +79,10 @@ RETRY_LOOP:
 		}
 		go cli.sendRequestsRoutine(conn)
 		go cli.recvResponseRoutine(conn)
+
+		// signal that we're now connected
+		cli.waitChan <- struct{}{}
+
 		return err
 	}
 	return nil // never happens
@@ -118,12 +128,22 @@ func (cli *socketClient) StopForError(err error) {
 	}
 	cli.mtx.Unlock()
 	cli.Stop()
+
+	if err == io.EOF {
+		// attempt reconnect
+		cli.Start()
+	}
 }
 
 func (cli *socketClient) Error() error {
 	cli.mtx.Lock()
 	defer cli.mtx.Unlock()
 	return cli.err
+}
+
+// Used to find out the client reconnected
+func (cli *socketClient) WaitForConnection() chan struct{} {
+	return cli.waitChan
 }
 
 //----------------------------------------

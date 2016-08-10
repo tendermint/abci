@@ -1,6 +1,7 @@
 package tmspcli
 
 import (
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -24,15 +25,19 @@ type grpcClient struct {
 	addr  string
 	err   error
 	resCb func(*types.Request, *types.Response) // listens to all callbacks
+
+	waitChan chan struct{}
 }
 
 func NewGRPCClient(addr string, mustConnect bool) (*grpcClient, error) {
 	cli := &grpcClient{
 		addr:        addr,
 		mustConnect: mustConnect,
+		waitChan:    make(chan struct{}, 1),
 	}
 	cli.QuitService = *NewQuitService(nil, "grpcClient", cli)
 	_, err := cli.Start() // Just start it, it's confusing for callers to remember to start.
+	<-cli.waitChan
 	return cli, err
 }
 
@@ -55,6 +60,9 @@ RETRY_LOOP:
 			}
 		}
 		cli.client = types.NewTMSPApplicationClient(conn)
+
+		// signal that we're now connected
+		cli.waitChan <- struct{}{}
 		return nil
 	}
 }
@@ -80,12 +88,22 @@ func (cli *grpcClient) StopForError(err error) {
 	}
 	cli.mtx.Unlock()
 	cli.Stop()
+
+	if err == io.EOF {
+		// attempt reconnect
+		cli.Start()
+	}
 }
 
 func (cli *grpcClient) Error() error {
 	cli.mtx.Lock()
 	defer cli.mtx.Unlock()
 	return cli.err
+}
+
+// Used to find out the client reconnected
+func (cli *grpcClient) WaitForConnection() chan struct{} {
+	return cli.waitChan
 }
 
 //----------------------------------------
