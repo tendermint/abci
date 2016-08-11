@@ -56,7 +56,7 @@ func NewSocketClient(addr string, mustConnect bool) (*socketClient, error) {
 		resCb:    nil,
 		waitChan: make(chan struct{}, 1),
 	}
-	cli.QuitService = *NewQuitService(nil, "socketClient", cli)
+	cli.QuitService = *NewQuitService(log, "socketClient", cli)
 	_, err := cli.Start() // Just start it, it's confusing for callers to remember to start.
 	<-cli.waitChan
 	return cli, err
@@ -96,6 +96,14 @@ func (cli *socketClient) OnStop() {
 	cli.flushQueue()
 }
 
+// Allow client to be reset
+func (cli *socketClient) OnReset() error {
+	cli.mtx.Lock()
+	defer cli.mtx.Unlock()
+	cli.err = nil
+	return nil
+}
+
 func (cli *socketClient) flushQueue() {
 LOOP:
 	for {
@@ -122,15 +130,17 @@ func (cli *socketClient) StopForError(err error) {
 	}
 
 	cli.mtx.Lock()
-	log.Warn(Fmt("Stopping tmsp.socketClient for error: %v\n", err.Error()))
+	log.Warn(Fmt("Stopping tmsp.socketClient for error: %v", err.Error()))
 	if cli.err == nil {
 		cli.err = err
 	}
 	cli.mtx.Unlock()
 	cli.Stop()
+	cli.Reset()
 
 	if err == io.EOF {
 		// attempt reconnect
+		log.Notice("Reconnecting ...")
 		cli.Start()
 	}
 }

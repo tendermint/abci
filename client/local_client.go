@@ -32,6 +32,10 @@ func (app *localClient) Error() error {
 	return nil
 }
 
+func (app *localClient) WaitForConnection() chan struct{} {
+	return nil
+}
+
 func (app *localClient) Stop() bool {
 	return true
 }
