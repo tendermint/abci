@@ -42,7 +42,9 @@ type socketClient struct {
 	reqSent *list.List
 	resCb   func(*types.Request, *types.Response) // listens to all callbacks
 
-	waitChan chan struct{}
+	// waitChan fires nil when a connection is made (or remade).
+	// if mustConnect==false, it fires an error if a connection attempt fails
+	waitChan chan error
 }
 
 func NewSocketClient(addr string, mustConnect bool) (*socketClient, error) {
@@ -54,7 +56,7 @@ func NewSocketClient(addr string, mustConnect bool) (*socketClient, error) {
 		addr:     addr,
 		reqSent:  list.New(),
 		resCb:    nil,
-		waitChan: make(chan struct{}, 1),
+		waitChan: make(chan error, 1),
 	}
 	cli.QuitService = *NewQuitService(log, "socketClient", cli)
 	_, err := cli.Start() // Just start it, it's confusing for callers to remember to start.
@@ -70,9 +72,11 @@ RETRY_LOOP:
 		conn, err := Connect(cli.addr)
 		if err != nil {
 			if cli.mustConnect {
+				// signal the failure
+				cli.waitChan <- err
 				return err
 			} else {
-				log.Warn(Fmt("tmsp.socketClient failed to connect to %v.  Retrying...\n", cli.addr))
+				log.Warn(Fmt("tmsp.socketClient failed to connect to %v.  Retrying...", cli.addr))
 				time.Sleep(time.Second * 3)
 				continue RETRY_LOOP
 			}
@@ -81,9 +85,8 @@ RETRY_LOOP:
 		go cli.recvResponseRoutine(conn)
 
 		// signal that we're now connected
-		cli.waitChan <- struct{}{}
-
-		return err
+		cli.waitChan <- nil
+		return nil
 	}
 	return nil // never happens
 }
@@ -152,7 +155,7 @@ func (cli *socketClient) Error() error {
 }
 
 // Used to find out the client reconnected
-func (cli *socketClient) WaitForConnection() chan struct{} {
+func (cli *socketClient) WaitForConnection() chan error {
 	return cli.waitChan
 }
 

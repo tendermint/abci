@@ -11,7 +11,7 @@ type Client interface {
 	SetResponseCallback(Callback)
 	Error() error
 	Stop() bool
-	WaitForConnection() chan struct{} // chan fires on connecting
+	WaitForConnection() chan error // chan fires on connecting
 
 	FlushAsync() *ReqRes
 	EchoAsync(msg string) *ReqRes

@@ -26,14 +26,14 @@ type grpcClient struct {
 	err   error
 	resCb func(*types.Request, *types.Response) // listens to all callbacks
 
-	waitChan chan struct{}
+	waitChan chan error
 }
 
 func NewGRPCClient(addr string, mustConnect bool) (*grpcClient, error) {
 	cli := &grpcClient{
 		addr:        addr,
 		mustConnect: mustConnect,
-		waitChan:    make(chan struct{}, 1),
+		waitChan:    make(chan error, 1),
 	}
 	cli.QuitService = *NewQuitService(nil, "grpcClient", cli)
 	_, err := cli.Start() // Just start it, it's confusing for callers to remember to start.
@@ -52,6 +52,7 @@ RETRY_LOOP:
 		conn, err := grpc.Dial(cli.addr, grpc.WithInsecure(), grpc.WithDialer(dialerFunc))
 		if err != nil {
 			if cli.mustConnect {
+				cli.waitChan <- err // signal the failure
 				return err
 			} else {
 				log.Warn(Fmt("tmsp.grpcClient failed to connect to %v.  Retrying...\n", cli.addr))
@@ -62,7 +63,7 @@ RETRY_LOOP:
 		cli.client = types.NewTMSPApplicationClient(conn)
 
 		// signal that we're now connected
-		cli.waitChan <- struct{}{}
+		cli.waitChan <- nil
 		return nil
 	}
 }
@@ -102,7 +103,7 @@ func (cli *grpcClient) Error() error {
 }
 
 // Used to find out the client reconnected
-func (cli *grpcClient) WaitForConnection() chan struct{} {
+func (cli *grpcClient) WaitForConnection() chan error {
 	return cli.waitChan
 }
 

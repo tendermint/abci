@@ -32,7 +32,7 @@ func (app *localClient) Error() error {
 	return nil
 }
 
-func (app *localClient) WaitForConnection() chan struct{} {
+func (app *localClient) WaitForConnection() chan error {
 	return nil
 }
 
