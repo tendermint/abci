@@ -96,7 +96,6 @@ func (cli *socketClient) OnStop() {
 	if cli.conn != nil {
 		cli.conn.Close()
 	}
-	cli.flushQueue()
 }
 
 // Allow client to be reset
@@ -104,6 +103,7 @@ func (cli *socketClient) OnReset() error {
 	cli.mtx.Lock()
 	defer cli.mtx.Unlock()
 	cli.err = nil
+	cli.flushQueue
 	return nil
 }
 

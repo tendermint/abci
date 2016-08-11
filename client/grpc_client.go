@@ -73,6 +73,13 @@ func (cli *grpcClient) OnStop() {
 	// TODO: how to close when TMSPApplicationClient interface doesn't expose Close ?
 }
 
+func (cli *grpcClient) OnReset() error {
+	cli.mtx.Lock()
+	defer cli.mtx.Unlock()
+	cli.err = nil
+	return nil
+}
+
 // Set listener for all responses
 // NOTE: callback may get internally generated flush responses.
 func (cli *grpcClient) SetResponseCallback(resCb Callback) {
@@ -82,6 +89,10 @@ func (cli *grpcClient) SetResponseCallback(resCb Callback) {
 }
 
 func (cli *grpcClient) StopForError(err error) {
+	if !cli.IsRunning() {
+		return
+	}
+
 	cli.mtx.Lock()
 	log.Warn(Fmt("Stopping tmsp.grpcClient for error: %v\n", err.Error()))
 	if cli.err == nil {
@@ -89,9 +100,11 @@ func (cli *grpcClient) StopForError(err error) {
 	}
 	cli.mtx.Unlock()
 	cli.Stop()
+	cli.Reset()
 
 	if err == io.EOF {
 		// attempt reconnect
+		log.Notice("Reconnecting ...")
 		cli.Start()
 	}
 }
