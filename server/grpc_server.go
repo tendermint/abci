@@ -53,3 +53,7 @@ func (s *GRPCServer) OnStop() {
 	s.QuitService.OnStop()
 	s.listener.Close()
 }
+
+func (s *GRPCServer) OnReset() error {
+	return nil
+}

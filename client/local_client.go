@@ -36,6 +36,10 @@ func (app *localClient) SetConnectCallback(f func(error)) {
 	//
 }
 
+func (app *localClient) IsConnected() bool {
+	return true
+}
+
 func (app *localClient) Stop() bool {
 	return true
 }

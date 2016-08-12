@@ -54,6 +54,7 @@ func dialerFunc(addr string, timeout time.Duration) (net.Conn, error) {
 func (cli *grpcClient) OnStart() error {
 	cli.QuitService.OnStart()
 RETRY_LOOP:
+
 	for {
 		conn, err := grpc.Dial(cli.addr, grpc.WithInsecure(), grpc.WithDialer(dialerFunc))
 		if err != nil {
@@ -66,7 +67,11 @@ RETRY_LOOP:
 				continue RETRY_LOOP
 			}
 		}
+
+		cli.mtx.Lock()
 		cli.client = types.NewTMSPApplicationClient(conn)
+		cli.err = nil
+		cli.mtx.Unlock()
 
 		// signal that we're now connected
 		cli.ConnectCallback(nil)
@@ -76,13 +81,18 @@ RETRY_LOOP:
 
 func (cli *grpcClient) OnStop() {
 	cli.QuitService.OnStop()
-	// TODO: how to close when TMSPApplicationClient interface doesn't expose Close ?
+	cli.mtx.Lock()
+	defer cli.mtx.Unlock()
+	// TODO: how to close conn? its not a net.Conn and grpc doesn't expose a Close()
+	/*if cli.conn != nil {
+		cli.conn.Close()
+	}*/
 }
 
 func (cli *grpcClient) OnReset() error {
 	cli.mtx.Lock()
 	defer cli.mtx.Unlock()
-	cli.err = nil
+	cli.client = nil
 	return nil
 }
 
@@ -126,6 +136,15 @@ func (cli *grpcClient) SetConnectCallback(f func(err error)) {
 	cli.mtx.Lock()
 	defer cli.mtx.Unlock()
 	cli.connectCallback = f
+}
+
+func (cli *grpcClient) IsConnected() bool {
+	if cli.IsRunning() {
+		cli.mtx.Lock()
+		defer cli.mtx.Unlock()
+		return cli.client != nil
+	}
+	return false
 }
 
 //----------------------------------------

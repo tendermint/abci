@@ -5,7 +5,6 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"reflect"
 	"sync"
@@ -29,6 +28,7 @@ const flushThrottleMS = 20      // Don't wait longer than...
 // with concurrent callers.
 type socketClient struct {
 	QuitService
+	done chan struct{}
 
 	reqQueue    chan *ReqRes
 	flushTimer  *ThrottleTimer
@@ -46,6 +46,7 @@ type socketClient struct {
 
 func NewSocketClient(addr string, mustConnect bool) (*socketClient, error) {
 	cli := &socketClient{
+		done:        make(chan struct{}),
 		reqQueue:    make(chan *ReqRes, reqQueueSize),
 		flushTimer:  NewThrottleTimer("socketClient", flushThrottleMS),
 		mustConnect: mustConnect,
@@ -86,10 +87,13 @@ RETRY_LOOP:
 				continue RETRY_LOOP
 			}
 		}
+		cli.mtx.Lock()
+		cli.err = nil
+		cli.conn = conn
+		cli.mtx.Unlock()
+
 		go cli.sendRequestsRoutine(conn)
 		go cli.recvResponseRoutine(conn)
-
-		cli.conn = conn
 
 		// signal that we're now connected
 		cli.ConnectCallback(nil)
@@ -100,6 +104,9 @@ RETRY_LOOP:
 
 func (cli *socketClient) OnStop() {
 	cli.QuitService.OnStop()
+	<-cli.done
+	cli.mtx.Lock()
+	defer cli.mtx.Unlock()
 	if cli.conn != nil {
 		cli.conn.Close()
 	}
@@ -109,10 +116,11 @@ func (cli *socketClient) OnStop() {
 func (cli *socketClient) OnReset() error {
 	cli.mtx.Lock()
 	defer cli.mtx.Unlock()
-	cli.err = nil
+	// NOTE: we dont reset err here because it needs to be checked
 	cli.conn = nil
 	cli.flushQueue()
 	cli.reqSent = list.New()
+	cli.done = make(chan struct{})
 	return nil
 }
 
@@ -147,14 +155,17 @@ func (cli *socketClient) StopForError(err error) {
 		cli.err = err
 	}
 	cli.mtx.Unlock()
-	cli.Stop()
+
+	if stopped := cli.Stop(); !stopped {
+		// if already stopped, don't reset
+		return
+	}
 	cli.Reset()
 
-	if err == io.EOF {
-		// attempt reconnect
-		log.Notice("Reconnecting ...")
-		cli.Start()
-	}
+	// err is usually io.EOF but sometimes "read unix @sock: read: connection reset by peer"
+	// since we don't really know all the ways it could fail, always reconnect?
+	log.Notice("Reconnecting ...")
+	cli.Start()
 }
 
 func (cli *socketClient) Error() error {
@@ -170,6 +181,15 @@ func (cli *socketClient) SetConnectCallback(f func(err error)) {
 	cli.connectCallback = f
 }
 
+func (cli *socketClient) IsConnected() bool {
+	if cli.IsRunning() {
+		cli.mtx.Lock()
+		defer cli.mtx.Unlock()
+		return cli.conn != nil
+	}
+	return false
+}
+
 //----------------------------------------
 
 func (cli *socketClient) sendRequestsRoutine(conn net.Conn) {
@@ -183,19 +203,22 @@ func (cli *socketClient) sendRequestsRoutine(conn net.Conn) {
 				// Probably will fill the buffer, or retry later.
 			}
 		case <-cli.QuitService.Quit:
+			close(cli.done)
 			return
 		case reqres := <-cli.reqQueue:
 			cli.willSendReq(reqres)
 			err := types.WriteMessage(reqres.Request, w)
 			if err != nil {
-				cli.StopForError(err)
+				close(cli.done)
+				cli.StopForError(fmt.Errorf("Error writing msg: %v", err))
 				return
 			}
 			// log.Debug("Sent request", "requestType", reflect.TypeOf(reqres.Request), "request", reqres.Request)
 			if _, ok := reqres.Request.Value.(*types.Request_Flush); ok {
 				err = w.Flush()
 				if err != nil {
-					cli.StopForError(err)
+					close(cli.done)
+					cli.StopForError(fmt.Errorf("Error flushing writer: %v", err))
 					return
 				}
 			}
@@ -424,7 +447,7 @@ func (cli *socketClient) EndBlockSync(height uint64) (validators []*types.Valida
 //----------------------------------------
 
 func (cli *socketClient) queueRequest(req *types.Request) *ReqRes {
-	if !cli.IsRunning() {
+	if !cli.IsConnected() {
 		return nil
 	}
 
