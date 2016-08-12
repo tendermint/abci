@@ -29,7 +29,6 @@ const flushThrottleMS = 20      // Don't wait longer than...
 // with concurrent callers.
 type socketClient struct {
 	QuitService
-	sync.Mutex // [EB]: is this even used?
 
 	reqQueue    chan *ReqRes
 	flushTimer  *ThrottleTimer
@@ -42,9 +41,7 @@ type socketClient struct {
 	reqSent *list.List
 	resCb   func(*types.Request, *types.Response) // listens to all callbacks
 
-	// waitChan fires nil when a connection is made (or remade).
-	// if mustConnect==false, it fires an error if a connection attempt fails
-	waitChan chan error
+	connectCallback func(err error) // runs after connecting
 }
 
 func NewSocketClient(addr string, mustConnect bool) (*socketClient, error) {
@@ -53,27 +50,35 @@ func NewSocketClient(addr string, mustConnect bool) (*socketClient, error) {
 		flushTimer:  NewThrottleTimer("socketClient", flushThrottleMS),
 		mustConnect: mustConnect,
 
-		addr:     addr,
-		reqSent:  list.New(),
-		resCb:    nil,
-		waitChan: make(chan error, 1),
+		addr:    addr,
+		reqSent: list.New(),
+		resCb:   nil,
 	}
 	cli.QuitService = *NewQuitService(log, "socketClient", cli)
 	_, err := cli.Start() // Just start it, it's confusing for callers to remember to start.
-	<-cli.waitChan
 	return cli, err
+}
+
+func (cli *socketClient) ConnectCallback(err error) {
+	cli.mtx.Lock()
+	defer cli.mtx.Unlock()
+	if cli.connectCallback != nil {
+		cli.connectCallback(err)
+	}
 }
 
 func (cli *socketClient) OnStart() error {
 	cli.QuitService.OnStart()
 
+	var err error
+	var conn net.Conn
 RETRY_LOOP:
 	for {
-		conn, err := Connect(cli.addr)
+		conn, err = Connect(cli.addr)
 		if err != nil {
 			if cli.mustConnect {
 				// signal the failure
-				cli.waitChan <- err
+				cli.ConnectCallback(err)
 				return err
 			} else {
 				log.Warn(Fmt("tmsp.socketClient failed to connect to %v.  Retrying...", cli.addr))
@@ -84,8 +89,10 @@ RETRY_LOOP:
 		go cli.sendRequestsRoutine(conn)
 		go cli.recvResponseRoutine(conn)
 
+		cli.conn = conn
+
 		// signal that we're now connected
-		cli.waitChan <- nil
+		cli.ConnectCallback(nil)
 		return nil
 	}
 	return nil // never happens
@@ -103,7 +110,9 @@ func (cli *socketClient) OnReset() error {
 	cli.mtx.Lock()
 	defer cli.mtx.Unlock()
 	cli.err = nil
-	cli.flushQueue
+	cli.conn = nil
+	cli.flushQueue()
+	cli.reqSent = list.New()
 	return nil
 }
 
@@ -154,9 +163,11 @@ func (cli *socketClient) Error() error {
 	return cli.err
 }
 
-// Used to find out the client reconnected
-func (cli *socketClient) WaitForConnection() chan error {
-	return cli.waitChan
+// Called on connecting
+func (cli *socketClient) SetConnectCallback(f func(err error)) {
+	cli.mtx.Lock()
+	defer cli.mtx.Unlock()
+	cli.connectCallback = f
 }
 
 //----------------------------------------
@@ -205,11 +216,13 @@ func (cli *socketClient) recvResponseRoutine(conn net.Conn) {
 		case *types.Response_Exception:
 			// XXX After setting cli.err, release waiters (e.g. reqres.Done())
 			cli.StopForError(errors.New(r.Exception.Error))
+			return
 		default:
 			// log.Debug("Received response", "responseType", reflect.TypeOf(res), "response", res)
 			err := cli.didRecvResponse(res)
 			if err != nil {
 				cli.StopForError(err)
+				return
 			}
 		}
 	}

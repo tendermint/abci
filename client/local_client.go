@@ -32,8 +32,8 @@ func (app *localClient) Error() error {
 	return nil
 }
 
-func (app *localClient) WaitForConnection() chan error {
-	return nil
+func (app *localClient) SetConnectCallback(f func(error)) {
+	//
 }
 
 func (app *localClient) Stop() bool {

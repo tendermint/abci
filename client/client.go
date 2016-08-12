@@ -11,7 +11,7 @@ type Client interface {
 	SetResponseCallback(Callback)
 	Error() error
 	Stop() bool
-	WaitForConnection() chan error // chan fires on connecting
+	SetConnectCallback(f func(error))
 
 	FlushAsync() *ReqRes
 	EchoAsync(msg string) *ReqRes
