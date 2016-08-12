@@ -60,14 +60,6 @@ func NewSocketClient(addr string, mustConnect bool) (*socketClient, error) {
 	return cli, err
 }
 
-func (cli *socketClient) ConnectCallback(err error) {
-	cli.mtx.Lock()
-	defer cli.mtx.Unlock()
-	if cli.connectCallback != nil {
-		cli.connectCallback(err)
-	}
-}
-
 func (cli *socketClient) OnStart() error {
 	cli.QuitService.OnStart()
 
@@ -104,7 +96,7 @@ RETRY_LOOP:
 
 func (cli *socketClient) OnStop() {
 	cli.QuitService.OnStop()
-	<-cli.done
+
 	cli.mtx.Lock()
 	defer cli.mtx.Unlock()
 	if cli.conn != nil {
@@ -124,16 +116,48 @@ func (cli *socketClient) OnReset() error {
 	return nil
 }
 
-func (cli *socketClient) flushQueue() {
-LOOP:
-	for {
-		select {
-		case reqres := <-cli.reqQueue:
-			reqres.Done()
-		default:
-			break LOOP
-		}
+// Stop the client and restart it in a new go-routine
+func (cli *socketClient) StopForError(err error) {
+	if !cli.IsRunning() {
+		return
 	}
+
+	cli.setError(err)
+
+	log.Warn(Fmt("Stopping tmsp.socketClient for error: %v", err.Error()))
+	if stopped := cli.Stop(); !stopped {
+		// if already stopped, don't reset
+		return
+	}
+
+	// err is usually io.EOF but sometimes "read unix @sock: read: connection reset by peer"
+	// since we don't really know all the ways it could fail, always reconnect.
+	// need a go-routine so we can wait for callers of StopForError to return.
+	go cli.restart()
+}
+
+func (cli *socketClient) restart() {
+
+	// wait for the previous routines to finish shutting down
+	<-cli.done
+
+	log.Notice("Reset and Start client")
+	cli.Reset()
+	cli.Start()
+}
+
+func (cli *socketClient) setError(err error) {
+	cli.mtx.Lock()
+	defer cli.mtx.Unlock()
+	if cli.err == nil {
+		cli.err = err
+	}
+}
+
+func (cli *socketClient) Error() error {
+	cli.mtx.Lock()
+	defer cli.mtx.Unlock()
+	return cli.err
 }
 
 // Set listener for all responses
@@ -144,41 +168,20 @@ func (cli *socketClient) SetResponseCallback(resCb Callback) {
 	cli.resCb = resCb
 }
 
-func (cli *socketClient) StopForError(err error) {
-	if !cli.IsRunning() {
-		return
-	}
-
-	cli.mtx.Lock()
-	log.Warn(Fmt("Stopping tmsp.socketClient for error: %v", err.Error()))
-	if cli.err == nil {
-		cli.err = err
-	}
-	cli.mtx.Unlock()
-
-	if stopped := cli.Stop(); !stopped {
-		// if already stopped, don't reset
-		return
-	}
-	cli.Reset()
-
-	// err is usually io.EOF but sometimes "read unix @sock: read: connection reset by peer"
-	// since we don't really know all the ways it could fail, always reconnect?
-	log.Notice("Reconnecting ...")
-	cli.Start()
-}
-
-func (cli *socketClient) Error() error {
-	cli.mtx.Lock()
-	defer cli.mtx.Unlock()
-	return cli.err
-}
-
-// Called on connecting
+// Set a callback to be called when we connect
 func (cli *socketClient) SetConnectCallback(f func(err error)) {
 	cli.mtx.Lock()
 	defer cli.mtx.Unlock()
 	cli.connectCallback = f
+}
+
+// Call the connect callback
+func (cli *socketClient) ConnectCallback(err error) {
+	cli.mtx.Lock()
+	defer cli.mtx.Unlock()
+	if cli.connectCallback != nil {
+		cli.connectCallback(err)
+	}
 }
 
 func (cli *socketClient) IsConnected() bool {
@@ -193,6 +196,7 @@ func (cli *socketClient) IsConnected() bool {
 //----------------------------------------
 
 func (cli *socketClient) sendRequestsRoutine(conn net.Conn) {
+	defer close(cli.done)
 	w := bufio.NewWriter(conn)
 	for {
 		select {
@@ -203,13 +207,11 @@ func (cli *socketClient) sendRequestsRoutine(conn net.Conn) {
 				// Probably will fill the buffer, or retry later.
 			}
 		case <-cli.QuitService.Quit:
-			close(cli.done)
 			return
 		case reqres := <-cli.reqQueue:
 			cli.willSendReq(reqres)
 			err := types.WriteMessage(reqres.Request, w)
 			if err != nil {
-				close(cli.done)
 				cli.StopForError(fmt.Errorf("Error writing msg: %v", err))
 				return
 			}
@@ -217,7 +219,6 @@ func (cli *socketClient) sendRequestsRoutine(conn net.Conn) {
 			if _, ok := reqres.Request.Value.(*types.Request_Flush); ok {
 				err = w.Flush()
 				if err != nil {
-					close(cli.done)
 					cli.StopForError(fmt.Errorf("Error flushing writer: %v", err))
 					return
 				}
@@ -447,6 +448,8 @@ func (cli *socketClient) EndBlockSync(height uint64) (validators []*types.Valida
 //----------------------------------------
 
 func (cli *socketClient) queueRequest(req *types.Request) *ReqRes {
+	// only queue requests if we're connected (not just Running)
+	// otherwise we could be queuing stuff the restarted app wont know what to do with
 	if !cli.IsConnected() {
 		return nil
 	}
@@ -465,6 +468,18 @@ func (cli *socketClient) queueRequest(req *types.Request) *ReqRes {
 	}
 
 	return reqres
+}
+
+func (cli *socketClient) flushQueue() {
+LOOP:
+	for {
+		select {
+		case reqres := <-cli.reqQueue:
+			reqres.Done()
+		default:
+			break LOOP
+		}
+	}
 }
 
 //----------------------------------------

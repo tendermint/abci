@@ -1,7 +1,6 @@
 package tmspcli
 
 import (
-	"io"
 	"net"
 	"sync"
 	"time"
@@ -37,14 +36,6 @@ func NewGRPCClient(addr string, mustConnect bool) (*grpcClient, error) {
 	cli.QuitService = *NewQuitService(nil, "grpcClient", cli)
 	_, err := cli.Start() // Just start it, it's confusing for callers to remember to start.
 	return cli, err
-}
-
-func (cli *grpcClient) ConnectCallback(err error) {
-	cli.mtx.Lock()
-	defer cli.mtx.Unlock()
-	if cli.connectCallback != nil {
-		cli.connectCallback(err)
-	}
 }
 
 func dialerFunc(addr string, timeout time.Duration) (net.Conn, error) {
@@ -96,32 +87,29 @@ func (cli *grpcClient) OnReset() error {
 	return nil
 }
 
-// Set listener for all responses
-// NOTE: callback may get internally generated flush responses.
-func (cli *grpcClient) SetResponseCallback(resCb Callback) {
-	cli.mtx.Lock()
-	defer cli.mtx.Unlock()
-	cli.resCb = resCb
-}
-
 func (cli *grpcClient) StopForError(err error) {
 	if !cli.IsRunning() {
 		return
 	}
 
+	cli.setError(err)
+
+	log.Warn(Fmt("Stopping tmsp.grpcClient for error: %v", err.Error()))
+	if stopped := cli.Stop(); !stopped {
+		// if already stopped, don't reset
+		return
+	}
+
+	log.Notice("Reset and Start client")
+	cli.Reset()
+	cli.Start()
+}
+
+func (cli *grpcClient) setError(err error) {
 	cli.mtx.Lock()
-	log.Warn(Fmt("Stopping tmsp.grpcClient for error: %v\n", err.Error()))
+	defer cli.mtx.Unlock()
 	if cli.err == nil {
 		cli.err = err
-	}
-	cli.mtx.Unlock()
-	cli.Stop()
-	cli.Reset()
-
-	if err == io.EOF {
-		// attempt reconnect
-		log.Notice("Reconnecting ...")
-		cli.Start()
 	}
 }
 
@@ -131,11 +119,27 @@ func (cli *grpcClient) Error() error {
 	return cli.err
 }
 
+// Set listener for all responses
+// NOTE: callback may get internally generated flush responses.
+func (cli *grpcClient) SetResponseCallback(resCb Callback) {
+	cli.mtx.Lock()
+	defer cli.mtx.Unlock()
+	cli.resCb = resCb
+}
+
 // Called on connecting
 func (cli *grpcClient) SetConnectCallback(f func(err error)) {
 	cli.mtx.Lock()
 	defer cli.mtx.Unlock()
 	cli.connectCallback = f
+}
+
+func (cli *grpcClient) ConnectCallback(err error) {
+	cli.mtx.Lock()
+	defer cli.mtx.Unlock()
+	if cli.connectCallback != nil {
+		cli.connectCallback(err)
+	}
 }
 
 func (cli *grpcClient) IsConnected() bool {

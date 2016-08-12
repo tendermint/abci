@@ -61,7 +61,6 @@ func testStreamRestart(t *testing.T, app types.Application) {
 
 	server.Stop()
 	server.Reset()
-	client.SetResponseCallback(createCallback(t, 0, numAppendTxs, logFreq, done))
 	time.Sleep(time.Second * 1)
 	server.Start()
 	// wait to restart
@@ -73,6 +72,8 @@ WAIT:
 		time.Sleep(time.Second)
 
 	}
+
+	client.SetResponseCallback(createCallback(t, 0, numAppendTxs, logFreq, done))
 
 	// Write requests
 	for counter := 0; counter < numAppendTxs; counter++ {
