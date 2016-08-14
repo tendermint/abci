@@ -32,12 +32,8 @@ func (app *localClient) Error() error {
 	return nil
 }
 
-func (app *localClient) SetConnectCallback(f func(error)) {
+func (app *localClient) SetConnectCallback(f func()) {
 	//
-}
-
-func (app *localClient) IsConnected() bool {
-	return true
 }
 
 func (app *localClient) Stop() bool {

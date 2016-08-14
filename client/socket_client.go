@@ -28,7 +28,7 @@ const flushThrottleMS = 20      // Don't wait longer than...
 // with concurrent callers.
 type socketClient struct {
 	QuitService
-	done chan struct{}
+	wg *sync.WaitGroup
 
 	reqQueue    chan *ReqRes
 	flushTimer  *ThrottleTimer
@@ -41,12 +41,14 @@ type socketClient struct {
 	reqSent *list.List
 	resCb   func(*types.Request, *types.Response) // listens to all callbacks
 
-	connectCallback func(err error) // runs after connecting
+	connectCallback func() // runs after connecting
 }
 
+// if mustConnect, client will start and not attempt reconnects.
+// if !mustConnect, consumer must call Start(), client will always attempt reconnect
 func NewSocketClient(addr string, mustConnect bool) (*socketClient, error) {
 	cli := &socketClient{
-		done:        make(chan struct{}),
+		wg:          new(sync.WaitGroup),
 		reqQueue:    make(chan *ReqRes, reqQueueSize),
 		flushTimer:  NewThrottleTimer("socketClient", flushThrottleMS),
 		mustConnect: mustConnect,
@@ -56,8 +58,12 @@ func NewSocketClient(addr string, mustConnect bool) (*socketClient, error) {
 		resCb:   nil,
 	}
 	cli.QuitService = *NewQuitService(log, "socketClient", cli)
-	_, err := cli.Start() // Just start it, it's confusing for callers to remember to start.
-	return cli, err
+
+	if mustConnect {
+		_, err := cli.Start()
+		return cli, err
+	}
+	return cli, nil
 }
 
 func (cli *socketClient) OnStart() error {
@@ -70,8 +76,6 @@ RETRY_LOOP:
 		conn, err = Connect(cli.addr)
 		if err != nil {
 			if cli.mustConnect {
-				// signal the failure
-				cli.ConnectCallback(err)
 				return err
 			} else {
 				log.Warn(Fmt("tmsp.socketClient failed to connect to %v.  Retrying...", cli.addr))
@@ -84,11 +88,12 @@ RETRY_LOOP:
 		cli.conn = conn
 		cli.mtx.Unlock()
 
+		cli.wg.Add(2)
 		go cli.sendRequestsRoutine(conn)
 		go cli.recvResponseRoutine(conn)
 
 		// signal that we're now connected
-		cli.ConnectCallback(nil)
+		cli.ConnectCallback()
 		return nil
 	}
 	return nil // never happens
@@ -112,13 +117,12 @@ func (cli *socketClient) OnReset() error {
 	cli.conn = nil
 	cli.flushQueue()
 	cli.reqSent = list.New()
-	cli.done = make(chan struct{})
 	return nil
 }
 
 // Stop the client and restart it in a new go-routine
 func (cli *socketClient) StopForError(err error) {
-	if !cli.IsRunning() {
+	if !cli.IsRunning() || !cli.IsConnected() {
 		return
 	}
 
@@ -127,6 +131,10 @@ func (cli *socketClient) StopForError(err error) {
 	log.Warn(Fmt("Stopping tmsp.socketClient for error: %v", err.Error()))
 	if stopped := cli.Stop(); !stopped {
 		// if already stopped, don't reset
+		return
+	}
+
+	if cli.mustConnect {
 		return
 	}
 
@@ -139,11 +147,17 @@ func (cli *socketClient) StopForError(err error) {
 func (cli *socketClient) restart() {
 
 	// wait for the previous routines to finish shutting down
-	<-cli.done
+	cli.wg.Wait()
 
 	log.Notice("Reset and Start client")
 	cli.Reset()
 	cli.Start()
+}
+
+func (cli *socketClient) IsConnected() bool {
+	cli.mtx.Lock()
+	defer cli.mtx.Unlock()
+	return cli.conn != nil
 }
 
 func (cli *socketClient) setError(err error) {
@@ -169,34 +183,26 @@ func (cli *socketClient) SetResponseCallback(resCb Callback) {
 }
 
 // Set a callback to be called when we connect
-func (cli *socketClient) SetConnectCallback(f func(err error)) {
+func (cli *socketClient) SetConnectCallback(f func()) {
 	cli.mtx.Lock()
 	defer cli.mtx.Unlock()
 	cli.connectCallback = f
 }
 
 // Call the connect callback
-func (cli *socketClient) ConnectCallback(err error) {
+func (cli *socketClient) ConnectCallback() {
 	cli.mtx.Lock()
 	defer cli.mtx.Unlock()
 	if cli.connectCallback != nil {
-		cli.connectCallback(err)
+		cli.connectCallback()
 	}
-}
-
-func (cli *socketClient) IsConnected() bool {
-	if cli.IsRunning() {
-		cli.mtx.Lock()
-		defer cli.mtx.Unlock()
-		return cli.conn != nil
-	}
-	return false
 }
 
 //----------------------------------------
 
 func (cli *socketClient) sendRequestsRoutine(conn net.Conn) {
-	defer close(cli.done)
+	defer cli.wg.Done()
+
 	w := bufio.NewWriter(conn)
 	for {
 		select {
@@ -228,6 +234,8 @@ func (cli *socketClient) sendRequestsRoutine(conn net.Conn) {
 }
 
 func (cli *socketClient) recvResponseRoutine(conn net.Conn) {
+	defer cli.wg.Done()
+
 	r := bufio.NewReader(conn) // Buffer reads
 	for {
 		var res = &types.Response{}
@@ -447,13 +455,10 @@ func (cli *socketClient) EndBlockSync(height uint64) (validators []*types.Valida
 
 //----------------------------------------
 
+// XXX: we may be queuing requests while the app is down
+// that it wont know what to do with when it restarts.
+// Should we check connected, or just flush on start ..
 func (cli *socketClient) queueRequest(req *types.Request) *ReqRes {
-	// only queue requests if we're connected (not just Running)
-	// otherwise we could be queuing stuff the restarted app wont know what to do with
-	if !cli.IsConnected() {
-		return nil
-	}
-
 	reqres := NewReqRes(req)
 
 	// TODO: set cli.err if reqQueue times out

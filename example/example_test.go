@@ -49,6 +49,7 @@ func testStream(t *testing.T, app types.Application) {
 	if err != nil {
 		Exit(Fmt("Error starting socket client: %v", err.Error()))
 	}
+	client.Start()
 	defer client.Stop()
 
 	done := make(chan struct{})

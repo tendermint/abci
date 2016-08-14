@@ -1,6 +1,7 @@
 package tmspcli
 
 import (
+	"errors"
 	"net"
 	"sync"
 	"time"
@@ -25,17 +26,22 @@ type grpcClient struct {
 	err   error
 	resCb func(*types.Request, *types.Response) // listens to all callbacks
 
-	connectCallback func(err error) // runs after connecting
+	connectCallback func() // runs after connecting
 }
 
+// if mustConnect, client will start and not attempt reconnects.
+// if !mustConnect, consumer must call Start(), client will always attempt reconnect
 func NewGRPCClient(addr string, mustConnect bool) (*grpcClient, error) {
 	cli := &grpcClient{
 		addr:        addr,
 		mustConnect: mustConnect,
 	}
 	cli.QuitService = *NewQuitService(nil, "grpcClient", cli)
-	_, err := cli.Start() // Just start it, it's confusing for callers to remember to start.
-	return cli, err
+	if mustConnect {
+		_, err := cli.Start() // Just start it, it's confusing for callers to remember to start.
+		return cli, err
+	}
+	return cli, nil
 }
 
 func dialerFunc(addr string, timeout time.Duration) (net.Conn, error) {
@@ -50,7 +56,6 @@ RETRY_LOOP:
 		conn, err := grpc.Dial(cli.addr, grpc.WithInsecure(), grpc.WithDialer(dialerFunc))
 		if err != nil {
 			if cli.mustConnect {
-				cli.ConnectCallback(err)
 				return err
 			} else {
 				log.Warn(Fmt("tmsp.grpcClient failed to connect to %v.  Retrying...\n", cli.addr))
@@ -59,13 +64,25 @@ RETRY_LOOP:
 			}
 		}
 
+		client := types.NewTMSPApplicationClient(conn)
+
+		time.Sleep(time.Second * 3)
+	ENSURE_CONNECTED:
+		for {
+			_, err := client.Echo(context.Background(), &types.RequestEcho{"hello"}, grpc.FailFast(true))
+			if err == nil {
+				break ENSURE_CONNECTED
+			}
+			time.Sleep(time.Second)
+		}
+
 		cli.mtx.Lock()
-		cli.client = types.NewTMSPApplicationClient(conn)
+		cli.client = client
 		cli.err = nil
 		cli.mtx.Unlock()
 
 		// signal that we're now connected
-		cli.ConnectCallback(nil)
+		cli.ConnectCallback()
 		return nil
 	}
 }
@@ -88,7 +105,8 @@ func (cli *grpcClient) OnReset() error {
 }
 
 func (cli *grpcClient) StopForError(err error) {
-	if !cli.IsRunning() {
+
+	if !cli.IsRunning() || !cli.IsConnected() {
 		return
 	}
 
@@ -100,9 +118,19 @@ func (cli *grpcClient) StopForError(err error) {
 		return
 	}
 
+	if cli.mustConnect {
+		return
+	}
+
 	log.Notice("Reset and Start client")
 	cli.Reset()
-	cli.Start()
+	go cli.Start()
+}
+
+func (cli *grpcClient) IsConnected() bool {
+	cli.mtx.Lock()
+	defer cli.mtx.Unlock()
+	return cli.client != nil
 }
 
 func (cli *grpcClient) setError(err error) {
@@ -128,27 +156,18 @@ func (cli *grpcClient) SetResponseCallback(resCb Callback) {
 }
 
 // Called on connecting
-func (cli *grpcClient) SetConnectCallback(f func(err error)) {
+func (cli *grpcClient) SetConnectCallback(f func()) {
 	cli.mtx.Lock()
 	defer cli.mtx.Unlock()
 	cli.connectCallback = f
 }
 
-func (cli *grpcClient) ConnectCallback(err error) {
+func (cli *grpcClient) ConnectCallback() {
 	cli.mtx.Lock()
 	defer cli.mtx.Unlock()
 	if cli.connectCallback != nil {
-		cli.connectCallback(err)
+		cli.connectCallback()
 	}
-}
-
-func (cli *grpcClient) IsConnected() bool {
-	if cli.IsRunning() {
-		cli.mtx.Lock()
-		defer cli.mtx.Unlock()
-		return cli.client != nil
-	}
-	return false
 }
 
 //----------------------------------------
@@ -161,7 +180,7 @@ func (cli *grpcClient) IsConnected() bool {
 
 func (cli *grpcClient) EchoAsync(msg string) *ReqRes {
 	req := types.ToRequestEcho(msg)
-	res, err := cli.client.Echo(context.Background(), req.GetEcho())
+	res, err := cli.client.Echo(context.Background(), req.GetEcho(), grpc.FailFast(true))
 	if err != nil {
 		cli.err = err
 	}
@@ -170,7 +189,7 @@ func (cli *grpcClient) EchoAsync(msg string) *ReqRes {
 
 func (cli *grpcClient) FlushAsync() *ReqRes {
 	req := types.ToRequestFlush()
-	res, err := cli.client.Flush(context.Background(), req.GetFlush())
+	res, err := cli.client.Flush(context.Background(), req.GetFlush(), grpc.FailFast(true))
 	if err != nil {
 		cli.err = err
 	}
@@ -179,7 +198,7 @@ func (cli *grpcClient) FlushAsync() *ReqRes {
 
 func (cli *grpcClient) InfoAsync() *ReqRes {
 	req := types.ToRequestInfo()
-	res, err := cli.client.Info(context.Background(), req.GetInfo())
+	res, err := cli.client.Info(context.Background(), req.GetInfo(), grpc.FailFast(true))
 	if err != nil {
 		cli.err = err
 	}
@@ -188,7 +207,7 @@ func (cli *grpcClient) InfoAsync() *ReqRes {
 
 func (cli *grpcClient) SetOptionAsync(key string, value string) *ReqRes {
 	req := types.ToRequestSetOption(key, value)
-	res, err := cli.client.SetOption(context.Background(), req.GetSetOption())
+	res, err := cli.client.SetOption(context.Background(), req.GetSetOption(), grpc.FailFast(true))
 	if err != nil {
 		cli.err = err
 	}
@@ -197,7 +216,7 @@ func (cli *grpcClient) SetOptionAsync(key string, value string) *ReqRes {
 
 func (cli *grpcClient) AppendTxAsync(tx []byte) *ReqRes {
 	req := types.ToRequestAppendTx(tx)
-	res, err := cli.client.AppendTx(context.Background(), req.GetAppendTx())
+	res, err := cli.client.AppendTx(context.Background(), req.GetAppendTx(), grpc.FailFast(true))
 	if err != nil {
 		cli.err = err
 	}
@@ -206,7 +225,7 @@ func (cli *grpcClient) AppendTxAsync(tx []byte) *ReqRes {
 
 func (cli *grpcClient) CheckTxAsync(tx []byte) *ReqRes {
 	req := types.ToRequestCheckTx(tx)
-	res, err := cli.client.CheckTx(context.Background(), req.GetCheckTx())
+	res, err := cli.client.CheckTx(context.Background(), req.GetCheckTx(), grpc.FailFast(true))
 	if err != nil {
 		cli.err = err
 	}
@@ -215,7 +234,7 @@ func (cli *grpcClient) CheckTxAsync(tx []byte) *ReqRes {
 
 func (cli *grpcClient) QueryAsync(query []byte) *ReqRes {
 	req := types.ToRequestQuery(query)
-	res, err := cli.client.Query(context.Background(), req.GetQuery())
+	res, err := cli.client.Query(context.Background(), req.GetQuery(), grpc.FailFast(true))
 	if err != nil {
 		cli.err = err
 	}
@@ -224,7 +243,7 @@ func (cli *grpcClient) QueryAsync(query []byte) *ReqRes {
 
 func (cli *grpcClient) CommitAsync() *ReqRes {
 	req := types.ToRequestCommit()
-	res, err := cli.client.Commit(context.Background(), req.GetCommit())
+	res, err := cli.client.Commit(context.Background(), req.GetCommit(), grpc.FailFast(true))
 	if err != nil {
 		cli.err = err
 	}
@@ -233,7 +252,7 @@ func (cli *grpcClient) CommitAsync() *ReqRes {
 
 func (cli *grpcClient) InitChainAsync(validators []*types.Validator) *ReqRes {
 	req := types.ToRequestInitChain(validators)
-	res, err := cli.client.InitChain(context.Background(), req.GetInitChain())
+	res, err := cli.client.InitChain(context.Background(), req.GetInitChain(), grpc.FailFast(true))
 	if err != nil {
 		cli.err = err
 	}
@@ -242,7 +261,7 @@ func (cli *grpcClient) InitChainAsync(validators []*types.Validator) *ReqRes {
 
 func (cli *grpcClient) BeginBlockAsync(height uint64) *ReqRes {
 	req := types.ToRequestBeginBlock(height)
-	res, err := cli.client.BeginBlock(context.Background(), req.GetBeginBlock())
+	res, err := cli.client.BeginBlock(context.Background(), req.GetBeginBlock(), grpc.FailFast(true))
 	if err != nil {
 		cli.err = err
 	}
@@ -251,7 +270,7 @@ func (cli *grpcClient) BeginBlockAsync(height uint64) *ReqRes {
 
 func (cli *grpcClient) EndBlockAsync(height uint64) *ReqRes {
 	req := types.ToRequestEndBlock(height)
-	res, err := cli.client.EndBlock(context.Background(), req.GetEndBlock())
+	res, err := cli.client.EndBlock(context.Background(), req.GetEndBlock(), grpc.FailFast(true))
 	if err != nil {
 		cli.err = err
 	}
@@ -279,11 +298,35 @@ func (cli *grpcClient) finishAsyncCall(req *types.Request, res *types.Response) 
 	return reqres
 }
 
+func (cli *grpcClient) checkErrGetResult() *types.Result {
+	if cli.err != nil {
+		errorLog := cli.err.Error()
+		cli.StopForError(cli.err)
+		result := types.ErrInternalError
+		result.SetLog(errorLog)
+		return &result
+	}
+	return nil
+}
+
+func (cli *grpcClient) checkGetErr() error {
+	if cli.err != nil {
+		err := errors.New(cli.err.Error())
+		cli.StopForError(cli.err)
+		return err
+	}
+	return nil
+}
+
 //----------------------------------------
 
 func (cli *grpcClient) EchoSync(msg string) (res types.Result) {
-	r := cli.EchoAsync(msg).Response.GetEcho()
-	return types.NewResultOK([]byte(r.Message), LOG)
+	reqres := cli.EchoAsync(msg)
+	if res := cli.checkErrGetResult(); res != nil {
+		return *res
+	}
+	resp := reqres.Response.GetEcho()
+	return types.NewResultOK([]byte(resp.Message), LOG)
 }
 
 func (cli *grpcClient) FlushSync() error {
@@ -291,14 +334,18 @@ func (cli *grpcClient) FlushSync() error {
 }
 
 func (cli *grpcClient) InfoSync() (res types.Result) {
-	r := cli.InfoAsync().Response.GetInfo()
-	return types.NewResultOK([]byte(r.Info), LOG)
+	reqres := cli.InfoAsync()
+	if res := cli.checkErrGetResult(); res != nil {
+		return *res
+	}
+	resp := reqres.Response.GetInfo()
+	return types.NewResultOK([]byte(resp.Info), LOG)
 }
 
 func (cli *grpcClient) SetOptionSync(key string, value string) (res types.Result) {
 	reqres := cli.SetOptionAsync(key, value)
-	if cli.err != nil {
-		return types.ErrInternalError.SetLog(cli.err.Error())
+	if res := cli.checkErrGetResult(); res != nil {
+		return *res
 	}
 	resp := reqres.Response.GetSetOption()
 	return types.Result{Code: OK, Data: nil, Log: resp.Log}
@@ -306,8 +353,8 @@ func (cli *grpcClient) SetOptionSync(key string, value string) (res types.Result
 
 func (cli *grpcClient) AppendTxSync(tx []byte) (res types.Result) {
 	reqres := cli.AppendTxAsync(tx)
-	if cli.err != nil {
-		return types.ErrInternalError.SetLog(cli.err.Error())
+	if res := cli.checkErrGetResult(); res != nil {
+		return *res
 	}
 	resp := reqres.Response.GetAppendTx()
 	return types.Result{Code: resp.Code, Data: resp.Data, Log: resp.Log}
@@ -315,8 +362,8 @@ func (cli *grpcClient) AppendTxSync(tx []byte) (res types.Result) {
 
 func (cli *grpcClient) CheckTxSync(tx []byte) (res types.Result) {
 	reqres := cli.CheckTxAsync(tx)
-	if cli.err != nil {
-		return types.ErrInternalError.SetLog(cli.err.Error())
+	if res := cli.checkErrGetResult(); res != nil {
+		return *res
 	}
 	resp := reqres.Response.GetCheckTx()
 	return types.Result{Code: resp.Code, Data: resp.Data, Log: resp.Log}
@@ -324,8 +371,8 @@ func (cli *grpcClient) CheckTxSync(tx []byte) (res types.Result) {
 
 func (cli *grpcClient) QuerySync(query []byte) (res types.Result) {
 	reqres := cli.QueryAsync(query)
-	if cli.err != nil {
-		return types.ErrInternalError.SetLog(cli.err.Error())
+	if res := cli.checkErrGetResult(); res != nil {
+		return *res
 	}
 	resp := reqres.Response.GetQuery()
 	return types.Result{Code: resp.Code, Data: resp.Data, Log: resp.Log}
@@ -333,8 +380,8 @@ func (cli *grpcClient) QuerySync(query []byte) (res types.Result) {
 
 func (cli *grpcClient) CommitSync() (res types.Result) {
 	reqres := cli.CommitAsync()
-	if cli.err != nil {
-		return types.ErrInternalError.SetLog(cli.err.Error())
+	if res := cli.checkErrGetResult(); res != nil {
+		return *res
 	}
 	resp := reqres.Response.GetCommit()
 	return types.Result{Code: resp.Code, Data: resp.Data, Log: resp.Log}
@@ -342,24 +389,24 @@ func (cli *grpcClient) CommitSync() (res types.Result) {
 
 func (cli *grpcClient) InitChainSync(validators []*types.Validator) (err error) {
 	cli.InitChainAsync(validators)
-	if cli.err != nil {
-		return cli.err
+	if err := cli.checkGetErr(); err != nil {
+		return err
 	}
 	return nil
 }
 
 func (cli *grpcClient) BeginBlockSync(height uint64) (err error) {
 	cli.BeginBlockAsync(height)
-	if cli.err != nil {
-		return cli.err
+	if err := cli.checkGetErr(); err != nil {
+		return err
 	}
 	return nil
 }
 
 func (cli *grpcClient) EndBlockSync(height uint64) (validators []*types.Validator, err error) {
 	reqres := cli.EndBlockAsync(height)
-	if cli.err != nil {
-		return nil, cli.err
+	if err := cli.checkGetErr(); err != nil {
+		return nil, err
 	}
 	return reqres.Response.GetEndBlock().Diffs, nil
 }

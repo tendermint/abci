@@ -37,10 +37,17 @@ func testStreamRestart(t *testing.T, app types.Application) {
 	if err != nil {
 		Exit(Fmt("Error starting socket client: %v", err.Error()))
 	}
+	connChan := make(chan struct{})
+	client.SetConnectCallback(func() {
+		go func() { connChan <- struct{}{} }()
+	})
+	client.Start()
 	defer client.Stop()
 
 	done := make(chan struct{})
 	client.SetResponseCallback(createCallback(t, 0, numAppendTxs, logFreq, done))
+
+	<-connChan
 
 	// Write requests
 	for counter := 0; counter < numAppendTxs; counter++ {
@@ -64,14 +71,7 @@ func testStreamRestart(t *testing.T, app types.Application) {
 	time.Sleep(time.Second * 1)
 	server.Start()
 	// wait to restart
-WAIT:
-	for {
-		if client.IsConnected() {
-			break WAIT
-		}
-		time.Sleep(time.Second)
-
-	}
+	<-connChan
 
 	client.SetResponseCallback(createCallback(t, 0, numAppendTxs, logFreq, done))
 
@@ -133,7 +133,7 @@ func createCallback(t *testing.T, counter, numAppendTxs, logFreq int, done chan 
 
 func testGRPCSyncRestart(t *testing.T, app *types.GRPCApplication) {
 
-	numAppendTxs := 2000
+	numAppendTxs := 20
 
 	// Start the listener
 	server, err := server.NewGRPCServer("unix://test.sock", app)
@@ -146,6 +146,12 @@ func testGRPCSyncRestart(t *testing.T, app *types.GRPCApplication) {
 	if err != nil {
 		Exit(Fmt("Error starting GRPC server: %v", err.Error()))
 	}
+	connChan := make(chan struct{})
+	client.SetConnectCallback(func() {
+		go func() { connChan <- struct{}{} }()
+	})
+	client.Start()
+	<-connChan
 
 	// Write requests
 	for counter := 0; counter < numAppendTxs; counter++ {
@@ -153,7 +159,6 @@ func testGRPCSyncRestart(t *testing.T, app *types.GRPCApplication) {
 		response := client.AppendTxSync([]byte("test"))
 		// TODO: check err
 
-		counter += 1
 		if response.Code != types.CodeType_OK {
 			t.Error("AppendTx failed with ret_code", response.Code)
 		}
@@ -171,17 +176,19 @@ func testGRPCSyncRestart(t *testing.T, app *types.GRPCApplication) {
 
 	server.Stop()
 	server.Reset()
+
+	// so we notice its dead
+	for {
+		response := client.AppendTxSync([]byte("test"))
+		if response.Code != 0 {
+			break
+		}
+	}
+
 	time.Sleep(time.Second * 1)
 	server.Start()
-	// wait to restart
-WAIT:
-	for {
-		if client.IsConnected() {
-			break WAIT
-		}
-		time.Sleep(time.Second)
 
-	}
+	<-connChan
 
 	// Write requests
 	for counter := 0; counter < numAppendTxs; counter++ {
@@ -189,9 +196,8 @@ WAIT:
 		response := client.AppendTxSync([]byte("test"))
 		// TODO: check err
 
-		counter += 1
 		if response.Code != types.CodeType_OK {
-			t.Error("AppendTx failed with ret_code", response.Code)
+			t.Fatal("AppendTx failed with ret_code", response.Code)
 		}
 		if counter > numAppendTxs {
 			t.Fatal("Too many AppendTx responses")
@@ -202,6 +208,6 @@ WAIT:
 				time.Sleep(time.Second * 2) // Wait for a bit to allow counter overflow
 			}()
 		}
-
 	}
+
 }
