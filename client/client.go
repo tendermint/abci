@@ -11,6 +11,7 @@ type Client interface {
 	SetResponseCallback(Callback)
 	Error() error
 	Stop() bool
+	SetConnectCallback(f func())
 
 	FlushAsync() *ReqRes
 	EchoAsync(msg string) *ReqRes
