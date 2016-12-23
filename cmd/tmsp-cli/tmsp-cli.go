@@ -135,6 +135,28 @@ func badCmd(c *cli.Context, cmd string) {
 	cli.DefaultAppComplete(c)
 }
 
+//Generates new Args array based off of original Args call to maintain flag persistence
+func persistentArgs(removeArg string, line []byte) []string {
+	//function to remove first slice of matching string from string array
+	remove := func(slice []string, removeText string) []string {
+		for i := len(slice) - 1; i >= 0; i-- { //search from end to start
+			if slice[i] == removeText {
+				return append(slice[:i], slice[i+1:]...)
+			}
+		}
+		return slice
+	}
+
+	//generate the arguments to run from orginal os.Args
+	// to maintain flag arguments
+	args := os.Args
+	args = remove(args, removeArg)
+	if len(line) > 0 { //prevents introduction of extra space leading to argument parse errors
+		args = append(args, strings.Split(string(line), " ")...)
+	}
+	return args
+}
+
 //--------------------------------------------------------------------------------
 
 func cmdBatch(app *cli.App, c *cli.Context) error {
@@ -150,12 +172,9 @@ func cmdBatch(app *cli.App, c *cli.Context) error {
 		} else if err != nil {
 			return err
 		}
-		args := []string{"tmsp-cli"}
-		if c.GlobalBool("verbose") {
-			args = append(args, "--verbose")
-		}
-		args = append(args, strings.Split(string(line), " ")...)
-		app.Run(args)
+
+		args := persistentArgs("batch", line)
+		app.Run(args) //cli already prints error within its func call
 	}
 	return nil
 }
@@ -163,6 +182,7 @@ func cmdBatch(app *cli.App, c *cli.Context) error {
 func cmdConsole(app *cli.App, c *cli.Context) error {
 	// don't hard exit on mistyped commands (eg. check vs check_tx)
 	app.CommandNotFound = badCmd
+
 	for {
 		fmt.Printf("\n> ")
 		bufReader := bufio.NewReader(os.Stdin)
@@ -173,8 +193,7 @@ func cmdConsole(app *cli.App, c *cli.Context) error {
 			return err
 		}
 
-		args := []string{"tmsp-cli"}
-		args = append(args, strings.Split(string(line), " ")...)
+		args := persistentArgs("console", line)
 		app.Run(args) //cli already prints error within its func call
 	}
 }
