@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +18,29 @@ import (
 
 // client is a global variable so it can be reused by the console
 var client tmspcli.Client
+
+//structure for data passed to print response
+type PR struct {
+	res       types.Result
+	s         string
+	printCode bool
+	code      string
+}
+
+func newPR(res types.Result, s string, printCode bool) PR {
+	pr := PR{
+		res:       res,
+		s:         s,
+		printCode: printCode,
+		code:      "",
+	}
+
+	if printCode {
+		pr.code = res.Code.String()
+	}
+
+	return pr
+}
 
 func main() {
 
@@ -41,6 +65,10 @@ func main() {
 		cli.BoolFlag{
 			Name:  "verbose",
 			Usage: "print the command and results as if it were a console session",
+		},
+		cli.BoolFlag{
+			Name:  "mro",
+			Usage: "use machine readable output",
 		},
 	}
 	app.Commands = []cli.Command{
@@ -150,6 +178,7 @@ func persistentArgs(removeArg string, line []byte) []string {
 	//generate the arguments to run from orginal os.Args
 	// to maintain flag arguments
 	args := os.Args
+	fmt.Println(args)
 	args = remove(args, removeArg)
 	if len(line) > 0 { //prevents introduction of extra space leading to argument parse errors
 		args = append(args, strings.Split(string(line), " ")...)
@@ -174,7 +203,11 @@ func cmdBatch(app *cli.App, c *cli.Context) error {
 		}
 
 		args := persistentArgs("batch", line)
-		app.Run(args) //cli already prints error within its func call
+		err2 := app.Run(args) //cli prints error within its func call
+		if err2 != nil && c.GlobalBool("mro") {
+			printJSON(err)
+		}
+
 	}
 	return nil
 }
@@ -194,7 +227,10 @@ func cmdConsole(app *cli.App, c *cli.Context) error {
 		}
 
 		args := persistentArgs("console", line)
-		app.Run(args) //cli already prints error within its func call
+		err2 := app.Run(args) //cli prints error within its func call
+		if err2 != nil && c.GlobalBool("mro") {
+			printJSON(err)
+		}
 	}
 }
 
@@ -205,14 +241,16 @@ func cmdEcho(c *cli.Context) error {
 		return errors.New("Command echo takes 1 argument")
 	}
 	res := client.EchoSync(args[0])
-	printResponse(c, res, string(res.Data), false)
+	pr := newPR(res, string(res.Data), false)
+	printResponse(c, pr)
 	return nil
 }
 
 // Get some info from the application
 func cmdInfo(c *cli.Context) error {
 	res, _, _, _ := client.InfoSync()
-	printResponse(c, res, string(res.Data), false)
+	pr := newPR(res, string(res.Data), false)
+	printResponse(c, pr)
 	return nil
 }
 
@@ -223,7 +261,8 @@ func cmdSetOption(c *cli.Context) error {
 		return errors.New("Command set_option takes 2 arguments (key, value)")
 	}
 	res := client.SetOptionSync(args[0], args[1])
-	printResponse(c, res, Fmt("%s=%s", args[0], args[1]), false)
+	pr := newPR(res, Fmt("%s=%s", args[0], args[1]), false)
+	printResponse(c, pr)
 	return nil
 }
 
@@ -235,7 +274,8 @@ func cmdAppendTx(c *cli.Context) error {
 	}
 	txBytes := stringOrHexToBytes(c.Args()[0])
 	res := client.AppendTxSync(txBytes)
-	printResponse(c, res, string(res.Data), true)
+	pr := newPR(res, string(res.Data), true)
+	printResponse(c, pr)
 	return nil
 }
 
@@ -247,14 +287,16 @@ func cmdCheckTx(c *cli.Context) error {
 	}
 	txBytes := stringOrHexToBytes(c.Args()[0])
 	res := client.CheckTxSync(txBytes)
-	printResponse(c, res, string(res.Data), true)
+	pr := newPR(res, string(res.Data), true)
+	printResponse(c, pr)
 	return nil
 }
 
 // Get application Merkle root hash
 func cmdCommit(c *cli.Context) error {
 	res := client.CommitSync()
-	printResponse(c, res, Fmt("0x%X", res.Data), false)
+	pr := newPR(res, Fmt("0x%X", res.Data), false)
+	printResponse(c, pr)
 	return nil
 }
 
@@ -266,31 +308,56 @@ func cmdQuery(c *cli.Context) error {
 	}
 	queryBytes := stringOrHexToBytes(c.Args()[0])
 	res := client.QuerySync(queryBytes)
-	printResponse(c, res, string(res.Data), true)
+	pr := newPR(res, string(res.Data), true)
+	printResponse(c, pr)
 	return nil
 }
 
 //--------------------------------------------------------------------------------
 
-func printResponse(c *cli.Context, res types.Result, s string, printCode bool) {
-	if c.GlobalBool("verbose") {
+func printJSON(v interface{}) {
+	jsonBytes, err := json.Marshal(v)
+	if err != nil {
+		jsonBytes, _ = json.Marshal(err)
+	}
+	fmt.Println(string(jsonBytes))
+}
+
+func printResponse(c *cli.Context, pr PR) {
+
+	verbose := c.GlobalBool("verbose")
+	mro := c.GlobalBool("mro")
+
+	if mro {
+		jsonBytes, err := json.Marshal(pr)
+		if err != nil {
+			jsonBytes, _ = json.Marshal(err)
+		}
+		fmt.Println(string(jsonBytes))
+
+		return
+	}
+
+	if verbose {
 		fmt.Println(">", c.Command.Name, strings.Join(c.Args(), " "))
 	}
 
-	if printCode {
-		fmt.Printf("-> code: %s\n", res.Code.String())
-	}
-	/*if res.Error != "" {
-		fmt.Printf("-> error: %s\n", res.Error)
-	}*/
-	if s != "" {
-		fmt.Printf("-> data: %s\n", s)
-	}
-	if res.Log != "" {
-		fmt.Printf("-> log: %s\n", res.Log)
+	if pr.printCode {
+		fmt.Printf("-> code: %s\n", pr.code)
 	}
 
-	if c.GlobalBool("verbose") {
+	//if pr.res.Error != "" {
+	//	fmt.Printf("-> error: %s\n", pr.res.Error)
+	//}
+
+	if pr.s != "" {
+		fmt.Printf("-> data: %s\n", pr.s)
+	}
+	if pr.res.Log != "" {
+		fmt.Printf("-> log: %s\n", pr.res.Log)
+	}
+
+	if verbose {
 		fmt.Println("")
 	}
 
