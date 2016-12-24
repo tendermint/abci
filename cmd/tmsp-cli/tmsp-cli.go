@@ -18,9 +18,9 @@ import (
 
 //structure for data passed to print response
 // variables must be exposed for JSON to read
-type pr struct {
+type response struct {
 	Res       types.Result
-	S         string
+	Data      string
 	PrintCode bool
 	Code      string
 }
@@ -30,19 +30,19 @@ type er struct {
 	Error string
 }
 
-func newPr(res types.Result, s string, printCode bool) *pr {
-	out := &pr{
+func newResponse(res types.Result, data string, printCode bool) *response {
+	rsp := &response{
 		Res:       res,
-		S:         s,
+		Data:      data,
 		PrintCode: printCode,
 		Code:      "",
 	}
 
 	if printCode {
-		out.Code = res.Code.String()
+		rsp.Code = res.Code.String()
 	}
 
-	return out
+	return rsp
 }
 
 func newEr(err error) *er {
@@ -77,7 +77,7 @@ func main() {
 			Usage: "print the command and results as if it were a console session",
 		},
 		cli.BoolFlag{
-			Name:  "mro",
+			Name:  "json",
 			Usage: "use machine readable output",
 		},
 	}
@@ -167,7 +167,7 @@ func before(c *cli.Context) error {
 
 // badCmd is called when we invoke with an invalid first argument (just for console for now)
 func badCmd(c *cli.Context, cmd string) {
-	if c.GlobalBool("mro") {
+	if c.GlobalBool("json") {
 		printJSON(newEr(errors.New("Unknown command")))
 		return
 	}
@@ -211,7 +211,7 @@ func cmdBatch(app *cli.App, c *cli.Context) error {
 		args := persistentArgs(line)
 		err2 := app.Run(args) //cli prints error within its func call
 
-		if err2 != nil && c.GlobalBool("mro") {
+		if err2 != nil && c.GlobalBool("json") {
 			printJSON(newEr(err2))
 		}
 
@@ -235,7 +235,7 @@ func cmdConsole(app *cli.App, c *cli.Context) error {
 
 		args := persistentArgs(line)
 		err2 := app.Run(args) //cli prints error within its func call
-		if err2 != nil && c.GlobalBool("mro") {
+		if err2 != nil && c.GlobalBool("json") {
 			printJSON(newEr(err2))
 		}
 	}
@@ -248,16 +248,16 @@ func cmdEcho(c *cli.Context) error {
 		return errors.New("Command echo takes 1 argument")
 	}
 	res := client.EchoSync(args[0])
-	p := newPr(res, string(res.Data), false)
-	printResponse(c, p)
+	rsp := newResponse(res, string(res.Data), false)
+	printResponse(c, rsp)
 	return nil
 }
 
 // Get some info from the application
 func cmdInfo(c *cli.Context) error {
 	res, _, _, _ := client.InfoSync()
-	p := newPr(res, string(res.Data), false)
-	printResponse(c, p)
+	rsp := newResponse(res, string(res.Data), false)
+	printResponse(c, rsp)
 	return nil
 }
 
@@ -268,8 +268,8 @@ func cmdSetOption(c *cli.Context) error {
 		return errors.New("Command set_option takes 2 arguments (key, value)")
 	}
 	res := client.SetOptionSync(args[0], args[1])
-	p := newPr(res, Fmt("%s=%s", args[0], args[1]), false)
-	printResponse(c, p)
+	rsp := newResponse(res, Fmt("%s=%s", args[0], args[1]), false)
+	printResponse(c, rsp)
 	return nil
 }
 
@@ -281,8 +281,8 @@ func cmdAppendTx(c *cli.Context) error {
 	}
 	txBytes := stringOrHexToBytes(c.Args()[0])
 	res := client.AppendTxSync(txBytes)
-	p := newPr(res, string(res.Data), true)
-	printResponse(c, p)
+	rsp := newResponse(res, string(res.Data), true)
+	printResponse(c, rsp)
 	return nil
 }
 
@@ -294,16 +294,16 @@ func cmdCheckTx(c *cli.Context) error {
 	}
 	txBytes := stringOrHexToBytes(c.Args()[0])
 	res := client.CheckTxSync(txBytes)
-	p := newPr(res, string(res.Data), true)
-	printResponse(c, p)
+	rsp := newResponse(res, string(res.Data), true)
+	printResponse(c, rsp)
 	return nil
 }
 
 // Get application Merkle root hash
 func cmdCommit(c *cli.Context) error {
 	res := client.CommitSync()
-	p := newPr(res, Fmt("0x%X", res.Data), false)
-	printResponse(c, p)
+	rsp := newResponse(res, Fmt("0x%X", res.Data), false)
+	printResponse(c, rsp)
 	return nil
 }
 
@@ -315,8 +315,8 @@ func cmdQuery(c *cli.Context) error {
 	}
 	queryBytes := stringOrHexToBytes(c.Args()[0])
 	res := client.QuerySync(queryBytes)
-	p := newPr(res, string(res.Data), true)
-	printResponse(c, p)
+	rsp := newResponse(res, string(res.Data), true)
+	printResponse(c, rsp)
 	return nil
 }
 
@@ -330,13 +330,13 @@ func printJSON(v interface{}) {
 	fmt.Println(string(jsonBytes))
 }
 
-func printResponse(c *cli.Context, p *pr) {
+func printResponse(c *cli.Context, rsp *response) {
 
 	verbose := c.GlobalBool("verbose")
-	mro := c.GlobalBool("mro")
+	jsn := c.GlobalBool("json")
 
-	if mro {
-		printJSON(p)
+	if jsn {
+		printJSON(rsp)
 		return
 	}
 
@@ -344,19 +344,19 @@ func printResponse(c *cli.Context, p *pr) {
 		fmt.Println(">", c.Command.Name, strings.Join(c.Args(), " "))
 	}
 
-	if p.PrintCode {
-		fmt.Printf("-> code: %s\n", p.Code)
+	if rsp.PrintCode {
+		fmt.Printf("-> code: %s\n", rsp.Code)
 	}
 
 	//if pr.res.Error != "" {
 	//	fmt.Printf("-> error: %s\n", pr.res.Error)
 	//}
 
-	if p.S != "" {
-		fmt.Printf("-> data: %s\n", p.S)
+	if rsp.Data != "" {
+		fmt.Printf("-> data: %s\n", rsp.Data)
 	}
-	if p.Res.Log != "" {
-		fmt.Printf("-> log: %s\n", p.Res.Log)
+	if rsp.Res.Log != "" {
+		fmt.Printf("-> log: %s\n", rsp.Res.Log)
 	}
 
 	if verbose {
