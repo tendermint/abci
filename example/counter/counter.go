@@ -72,14 +72,14 @@ func (app *CounterApplication) Commit() types.Result {
 }
 
 func (app *CounterApplication) Query(query []byte) types.Result {
-	queryStr := string(query[:])
+	queryStr := string(query)
 
 	switch queryStr {
-	case "hashCount":
-		return types.NewResultOK(nil, Fmt("hashCount: %v", app.hashCount))
-	case "txCount":
-		return types.NewResultOK(nil, Fmt("txCount: %v", app.txCount))
+	case "hash":
+		return types.NewResultOK(nil, Fmt("%v", app.hashCount))
+	case "tx":
+		return types.NewResultOK(nil, Fmt("%v", app.txCount))
 	}
 
-	return types.ErrBadNonce.SetLog(Fmt("Invalid nonce. Expected hashCount or txCount, got %v", queryStr))
+	return types.ErrUnknownRequest.SetLog(Fmt("Invalid nonce. Expected hash or tx, got %v", queryStr))
 }

@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -25,11 +24,6 @@ type response struct {
 	Code      string
 }
 
-//trivial implementation of Error for JSON prints
-type er struct {
-	Error string
-}
-
 func newResponse(res types.Result, data string, printCode bool) *response {
 	rsp := &response{
 		Res:       res,
@@ -43,10 +37,6 @@ func newResponse(res types.Result, data string, printCode bool) *response {
 	}
 
 	return rsp
-}
-
-func newEr(err error) *er {
-	return &er{Error: err.Error()}
 }
 
 // client is a global variable so it can be reused by the console
@@ -75,10 +65,6 @@ func main() {
 		cli.BoolFlag{
 			Name:  "verbose",
 			Usage: "print the command and results as if it were a console session",
-		},
-		cli.BoolFlag{
-			Name:  "json",
-			Usage: "use machine readable output",
 		},
 	}
 	app.Commands = []cli.Command{
@@ -167,11 +153,6 @@ func before(c *cli.Context) error {
 
 // badCmd is called when we invoke with an invalid first argument (just for console for now)
 func badCmd(c *cli.Context, cmd string) {
-	if c.GlobalBool("json") {
-		printJSON(newEr(errors.New("Unknown command")))
-		return
-	}
-
 	fmt.Println("Unknown command:", cmd)
 	fmt.Println("Please try one of the following:")
 	fmt.Println("")
@@ -209,12 +190,7 @@ func cmdBatch(app *cli.App, c *cli.Context) error {
 		}
 
 		args := persistentArgs(line)
-		err2 := app.Run(args) //cli prints error within its func call
-
-		if err2 != nil && c.GlobalBool("json") {
-			printJSON(newEr(err2))
-		}
-
+		app.Run(args) //cli prints error within its func call
 	}
 	return nil
 }
@@ -234,10 +210,7 @@ func cmdConsole(app *cli.App, c *cli.Context) error {
 		}
 
 		args := persistentArgs(line)
-		err2 := app.Run(args) //cli prints error within its func call
-		if err2 != nil && c.GlobalBool("json") {
-			printJSON(newEr(err2))
-		}
+		app.Run(args) //cli prints error within its func call
 	}
 }
 
@@ -322,23 +295,9 @@ func cmdQuery(c *cli.Context) error {
 
 //--------------------------------------------------------------------------------
 
-func printJSON(v interface{}) {
-	jsonBytes, err := json.Marshal(v)
-	if err != nil {
-		jsonBytes, _ = json.Marshal(newEr(err))
-	}
-	fmt.Println(string(jsonBytes))
-}
-
 func printResponse(c *cli.Context, rsp *response) {
 
 	verbose := c.GlobalBool("verbose")
-	jsn := c.GlobalBool("json")
-
-	if jsn {
-		printJSON(rsp)
-		return
-	}
 
 	if verbose {
 		fmt.Println(">", c.Command.Name, strings.Join(c.Args(), " "))
