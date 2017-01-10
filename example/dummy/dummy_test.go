@@ -6,56 +6,40 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 	merkle "github.com/tendermint/go-merkle"
 	"github.com/tendermint/go-wire"
+	tmspcli "github.com/tendermint/tmsp/client"
+	"github.com/tendermint/tmsp/server"
 	"github.com/tendermint/tmsp/types"
 )
 
-func testDummy(t *testing.T, dummy types.Application, tx []byte, key, value string) {
-	if r := dummy.AppendTx(tx); r.IsErr() {
-		t.Fatal(r)
-	}
-	if r := dummy.AppendTx(tx); r.IsErr() {
-		t.Fatal(r)
-	}
+func testDummy(t *testing.T, app types.Application, tx []byte, key, value string) {
+	ar := app.AppendTx(tx)
+	require.False(t, ar.IsErr(), ar)
+	// repeating tx doesn't raise error
+	ar = app.AppendTx(tx)
+	require.False(t, ar.IsErr(), ar)
 
-	r := dummy.Query([]byte(key))
-	if r.IsErr() {
-		t.Fatal(r)
-	}
-
+	// make sure query is fine
+	r := app.Query([]byte(key))
+	require.False(t, r.IsErr(), r)
 	q := new(QueryResult)
-	if err := wire.ReadJSONBytes(r.Data, q); err != nil {
-		t.Fatal(err)
-	}
+	err := wire.ReadJSONBytes(r.Data, q)
+	require.Nil(t, err)
+	require.Equal(t, value, q.Value)
 
-	if q.Value != value {
-		t.Fatalf("Got %s, expected %s", q.Value, value)
-	}
-
-	rp := dummy.Proof([]byte(key), 0)
-	if rp.IsErr() {
-		t.Fatal(rp)
-	}
-
+	// make sure proof is fine
+	rp := app.Proof([]byte(key), 0)
+	require.False(t, rp.IsErr(), rp)
 	p, err := merkle.LoadProof(rp.Data)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !p.Valid() {
-		t.Fatal("Invalid proof")
-	}
-
-	if !bytes.Equal([]byte(key), p.Key()) {
-		t.Fatalf("Invalid key: %s", p.Key())
-	}
-
-	if !bytes.Equal([]byte(value), p.Value()) {
-		t.Fatalf("Invalid key: %s", p.Value())
-	}
+	require.Nil(t, err)
+	require.True(t, p.Valid())
+	assert.Equal(t, []byte(key), p.Key())
+	assert.Equal(t, []byte(value), p.Value())
 }
 
 func TestDummyKV(t *testing.T) {
@@ -222,4 +206,98 @@ func valsEqual(t *testing.T, vals1, vals2 []*types.Validator) {
 			t.Fatalf("vals dont match at index %d. got %X/%d , expected %X/%d", i, v2.PubKey, v2.Power, v1.PubKey, v1.Power)
 		}
 	}
+}
+
+func makeSocketClientServer(app types.Application, name string) (tmspcli.Client, Service, error) {
+	// Start the listener
+	socket := Fmt("unix://%s.sock", name)
+	server, err := server.NewSocketServer(socket, app)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Connect to the socket
+	client, err := tmspcli.NewSocketClient(socket, false)
+	if err != nil {
+		server.Stop()
+		return nil, nil, err
+	}
+	client.Start()
+
+	return client, server, err
+}
+
+func makeGRPCClientServer(app types.Application, name string) (tmspcli.Client, Service, error) {
+	// Start the listener
+	socket := Fmt("unix://%s.sock", name)
+
+	gapp := types.NewGRPCApplication(app)
+	server, err := server.NewGRPCServer(socket, gapp)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	client, err := tmspcli.NewGRPCClient(socket, true)
+	if err != nil {
+		server.Stop()
+		return nil, nil, err
+	}
+	return client, server, err
+}
+
+func TestClientServer(t *testing.T) {
+	// set up socket app
+	dummy := NewDummyApplication()
+	client, server, err := makeSocketClientServer(dummy, "dummy-socket")
+	require.Nil(t, err)
+	defer server.Stop()
+	defer client.Stop()
+
+	runClientTests(t, client)
+
+	// set up grpc app
+	dummy = NewDummyApplication()
+	gclient, gserver, err := makeGRPCClientServer(dummy, "dummy-grpc")
+	require.Nil(t, err)
+	defer gserver.Stop()
+	defer gclient.Stop()
+
+	runClientTests(t, gclient)
+}
+
+func runClientTests(t *testing.T, client tmspcli.Client) {
+	// run some tests....
+	key := "abc"
+	value := key
+	tx := []byte(key)
+	testClient(t, client, tx, key, value)
+
+	value = "def"
+	tx = []byte(key + "=" + value)
+	testClient(t, client, tx, key, value)
+}
+
+func testClient(t *testing.T, app tmspcli.Client, tx []byte, key, value string) {
+	ar := app.AppendTxSync(tx)
+	require.False(t, ar.IsErr(), ar)
+	// repeating tx doesn't raise error
+	ar = app.AppendTxSync(tx)
+	require.False(t, ar.IsErr(), ar)
+
+	// make sure query is fine
+	r := app.QuerySync([]byte(key))
+	require.False(t, r.IsErr(), r)
+	q := new(QueryResult)
+	err := wire.ReadJSONBytes(r.Data, q)
+	require.Nil(t, err)
+	require.Equal(t, value, q.Value)
+
+	// make sure proof is fine
+	rp := app.ProofSync([]byte(key), 0)
+	require.False(t, rp.IsErr(), rp)
+	p, err := merkle.LoadProof(rp.Data)
+	require.Nil(t, err)
+	require.True(t, p.Valid())
+	assert.Equal(t, []byte(key), p.Key())
+	assert.Equal(t, []byte(value), p.Value())
 }
