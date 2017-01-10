@@ -4,6 +4,10 @@ all: protoc test install
 
 NOVENDOR = go list github.com/tendermint/tmsp/... | grep -v /vendor/
 
+install-protoc:
+	# Download: https://github.com/google/protobuf/releases
+	go get github.com/golang/protobuf/protoc-gen-go
+
 protoc:
 	protoc --go_out=plugins=grpc:. types/*.proto
 
