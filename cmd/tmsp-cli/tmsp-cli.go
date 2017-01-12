@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	. "github.com/tendermint/go-common"
@@ -129,6 +130,13 @@ func main() {
 			Usage: "Query application state",
 			Action: func(c *cli.Context) error {
 				return cmdQuery(c)
+			},
+		},
+		{
+			Name:  "proof",
+			Usage: "Get proof for a key",
+			Action: func(c *cli.Context) error {
+				return cmdProof(c)
 			},
 		},
 	}
@@ -297,6 +305,27 @@ func cmdQuery(c *cli.Context) error {
 		return err
 	}
 	res := client.QuerySync(queryBytes)
+	rsp := newResponse(res, string(res.Data), true)
+	printResponse(c, rsp)
+	return nil
+}
+
+// Prove application state
+func cmdProof(c *cli.Context) error {
+	args := c.Args()
+	if len(args) < 1 {
+		return errors.New("Command proof takes 1 or 2 arguments")
+	}
+	keyBytes, err := stringOrHexToBytes(c.Args()[0])
+	if err != nil {
+		return err
+	}
+
+	var height int64
+	if len(args) == 2 {
+		height, _ = strconv.ParseInt(args[1], 10, 0)
+	}
+	res := client.ProofSync(keyBytes, height)
 	rsp := newResponse(res, string(res.Data), true)
 	printResponse(c, rsp)
 	return nil

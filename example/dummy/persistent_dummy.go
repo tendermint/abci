@@ -91,6 +91,10 @@ func (app *PersistentDummyApplication) Query(query []byte) types.Result {
 	return app.app.Query(query)
 }
 
+func (app *PersistentDummyApplication) Proof(key []byte, blockHeight int64) types.Result {
+	return app.app.Proof(key, blockHeight)
+}
+
 // Save the validators in the merkle tree
 func (app *PersistentDummyApplication) InitChain(validators []*types.Validator) {
 	for _, v := range validators {
