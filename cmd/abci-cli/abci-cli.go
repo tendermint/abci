@@ -346,7 +346,7 @@ func cmdEndBlock(c *cli.Context) error {
   height64 := uint64(height)
 
   res, err := client.EndBlockSync(height64)
-  jsonRes, err := json.Marshal(res.Diffs)
+  jsonRes, err := json.MarshalIndent(res.Diffs, "", "    ")
   printResponse(c, response{Data: jsonRes})
   return nil
 }
