@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"strconv"
 
 	"github.com/tendermint/abci/client"
 	"github.com/tendermint/abci/types"
@@ -116,6 +117,20 @@ func main() {
 			Usage: "Commit the application state and return the Merkle root hash",
 			Action: func(c *cli.Context) error {
 				return cmdCommit(c)
+			},
+		},
+		{
+			Name:  "begin_block",
+			Usage: "Delineate beginning of block with header and hash",
+			Action: func(c *cli.Context) error {
+				return cmdBeginBlock(c)
+			},
+		},
+		{
+			Name:  "end_block",
+			Usage: "Delineate end of block with height and receive info about changes to validator set",
+			Action: func(c *cli.Context) error {
+				return cmdEndBlock(c)
 			},
 		},
 		{
@@ -287,6 +302,46 @@ func cmdCheckTx(c *cli.Context) error {
 // Get application Merkle root hash
 func cmdCommit(c *cli.Context) error {
 	res := client.CommitSync()
+	printResponse(c, response{
+		Code: res.Code,
+		Data: res.Data,
+		Log:  res.Log,
+	})
+	return nil
+}
+
+// Delineate beginning of block with header and hash
+func cmdBeginBlock(c *cli.Context) error {
+	args := c.Args()
+	if len(args) > 2 {
+		return errors.New("Command begin block takes max 2 arguments")
+	}
+	headerBytes, err := stringOrHexToBytes(c.Args()[0])
+	if err != nil {
+		return err
+	}
+	res := client.BeginBlockSync(headerBytes)
+	printResponse(c, response{
+		Code: res.Code,
+		Data: res.Data,
+		Log:  res.Log,
+	})
+	
+	return nil
+}
+
+
+// Delineate end of block with height and receive info about changes to validator set
+func cmdEndBlock(c *cli.Context) error {
+	args := c.Args()
+	if len(args) > 1 {
+		return errors.New("Command begin block takes 1 argument: height")
+	}
+	height, err := strconv.Atoi(c.Args()[0])
+	if err != nil {
+		return err
+	}
+	res := client.EndBlockSync(height)
 	printResponse(c, response{
 		Code: res.Code,
 		Data: res.Data,
