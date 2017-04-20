@@ -317,18 +317,27 @@ func cmdBeginBlock(c *cli.Context) error {
 	if len(args) != 2 {
 		return errors.New("Command begin block takes 2 arguments: hash and header")
 	}
-	var header *types.Header
-	headArg, _ := stringOrHexToBytes(c.Args()[0])
 
-	err := json.Unmarshal(headArg, &header)
+	headerBytes, err := stringOrHexToBytes(c.Args()[0])
+	if err != nil {
+		return err
+	}
 
 	hashBytes, err := stringOrHexToBytes(c.Args()[1])
 	if err != nil {
 		return err
 	}
-	res := client.BeginBlockSync(hashBytes, header)
 
-	fmt.Println(res)
+	header := new(types.Header)
+	if err := json.Unmarshal(headerBytes, header); err != nil {
+		return err
+	}
+
+	if err := client.BeginBlockSync(hashBytes, header); err != nil {
+		return err
+	}
+
+	fmt.Println("Success")
 	return nil
 }
 
@@ -338,6 +347,7 @@ func cmdEndBlock(c *cli.Context) error {
 	if len(args) != 1 {
 		return errors.New("Command begin block takes 1 argument: height")
 	}
+
 	height, err := strconv.Atoi(c.Args()[0])
 	if err != nil {
 		return err
@@ -345,8 +355,21 @@ func cmdEndBlock(c *cli.Context) error {
 	height64 := uint64(height)
 
 	res, err := client.EndBlockSync(height64)
-	jsonRes, err := json.MarshalIndent(res.Diffs, "", "    ")
-	printResponse(c, response{Data: jsonRes})
+	if err != nil {
+		return err
+	}
+
+	if len(res.Diffs) > 0 {
+		jsonRes, err := json.MarshalIndent(res.Diffs, "", "\t")
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(string(jsonRes))
+	} else {
+		fmt.Println("Success")
+	}
+
 	return nil
 }
 
