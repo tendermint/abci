@@ -315,7 +315,7 @@ func cmdCommit(c *cli.Context) error {
 func cmdBeginBlock(c *cli.Context) error {
 	args := c.Args()
 	if len(args) != 2 {
-		return errors.New("Command begin block takes 2 arguments: hash and header")
+		return errors.New("Command begin block takes 2 arguments: header and hash")
 	}
 
 	headerBytes, err := stringOrHexToBytes(c.Args()[0])
