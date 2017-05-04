@@ -1,10 +1,8 @@
-package main
+package abciserver
 
 import (
 	"bytes"
 	"fmt"
-	"os"
-	"time"
 
 	abcicli "github.com/tendermint/abci/client"
 	"github.com/tendermint/abci/types"
@@ -12,38 +10,7 @@ import (
 	"github.com/tendermint/tmlibs/process"
 )
 
-func startApp(abciApp string) *process.Process {
-	// Start the app
-	//outBuf := NewBufferCloser(nil)
-	proc, err := process.StartProcess("abci_app",
-		"",
-		"bash",
-		[]string{"-c", abciApp},
-		nil,
-		os.Stdout,
-	)
-	if err != nil {
-		panic("running abci_app: " + err.Error())
-	}
-
-	// TODO a better way to handle this?
-	time.Sleep(time.Second)
-
-	return proc
-}
-
-func startClient(abciType string) abcicli.Client {
-	// Start client
-	client, err := abcicli.NewClient("tcp://127.0.0.1:46658", abciType, true)
-	if err != nil {
-		panic("connecting to abci_app: " + err.Error())
-	}
-	logger := log.NewTMLogger(log.NewSyncWriter(os.Stdout))
-	client.SetLogger(logger.With("module", "abcicli"))
-	return client
-}
-
-func setOption(client abcicli.Client, key, value string) {
+func SetOption(client abcicli.Client, key, value string) {
 	res := client.SetOptionSync(key, value)
 	_, _, log := res.Code, res.Data, res.Log
 	if res.IsErr() {
@@ -51,7 +18,7 @@ func setOption(client abcicli.Client, key, value string) {
 	}
 }
 
-func commit(client abcicli.Client, hashExp []byte) {
+func Commit(client abcicli.Client, hashExp []byte) {
 	res := client.CommitSync()
 	_, data, log := res.Code, res.Data, res.Log
 	if res.IsErr() {
@@ -63,7 +30,7 @@ func commit(client abcicli.Client, hashExp []byte) {
 	}
 }
 
-func deliverTx(client abcicli.Client, txBytes []byte, codeExp types.CodeType, dataExp []byte) {
+func DeliverTx(client abcicli.Client, txBytes []byte, codeExp types.CodeType, dataExp []byte) {
 	res := client.DeliverTxSync(txBytes)
 	code, data, log := res.Code, res.Data, res.Log
 	if code != codeExp {
@@ -76,7 +43,7 @@ func deliverTx(client abcicli.Client, txBytes []byte, codeExp types.CodeType, da
 	}
 }
 
-func checkTx(client abcicli.Client, txBytes []byte, codeExp types.CodeType, dataExp []byte) {
+func CheckTx(client abcicli.Client, txBytes []byte, codeExp types.CodeType, dataExp []byte) {
 	res := client.CheckTxSync(txBytes)
 	code, data, log := res.Code, res.Data, res.Log
 	if res.IsErr() {
