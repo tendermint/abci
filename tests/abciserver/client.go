@@ -6,9 +6,22 @@ import (
 
 	abcicli "github.com/tendermint/abci/client"
 	"github.com/tendermint/abci/types"
+	crypto "github.com/tendermint/go-crypto"
+	cmn "github.com/tendermint/tmlibs/common"
 	"github.com/tendermint/tmlibs/log"
 	"github.com/tendermint/tmlibs/process"
 )
+
+func InitChain(client abcicli.Client) {
+	total := 10
+	vals := make([]*types.Validator, total)
+	for i := 0; i < total; i++ {
+		pubkey := crypto.GenPrivKeyEd25519FromSecret([]byte(cmn.Fmt("test%d", i))).PubKey().Bytes()
+		power := cmn.RandInt()
+		vals[i] = &types.Validator{pubkey, uint64(power)}
+	}
+	client.InitChainSync(vals)
+}
 
 func SetOption(client abcicli.Client, key, value string) {
 	res := client.SetOptionSync(key, value)

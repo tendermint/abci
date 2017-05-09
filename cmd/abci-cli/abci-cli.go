@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/tendermint/abci/client"
 	test "github.com/tendermint/abci/tests/abciserver"
 	"github.com/tendermint/abci/types"
 	"github.com/tendermint/abci/version"
@@ -127,10 +128,10 @@ func main() {
 			},
 		},
 		{
-			Name:  "tests",
+			Name:  "test",
 			Usage: "Runs the integration tests",
 			Action: func(c *cli.Context) error {
-				return tests(app, c)
+				return cmdTest(app, c)
 			},
 		},
 	}
@@ -182,10 +183,13 @@ func persistentArgs(line []byte) []string {
 
 //--------------------------------------------------------------------------------
 
-func tests(app *cli.App, c *cli.Context) error {
-	fmt.Printf("Running tests")
+func cmdTest(app *cli.App, c *cli.Context) error {
+	fmt.Println("Running tests")
 	fmt.Printf("\n")
 
+	// Initially I want to call every available method on the ABCI and check whether it returns
+	// the correct type and whether it is implemented
+	// Then I want to test the counter app and whether it handles all cases correctly.
 	test.SetOption(client, "serial", "on")
 	test.Commit(client, nil)
 	test.DeliverTx(client, []byte("abc"), types.CodeType_BadNonce, nil)
