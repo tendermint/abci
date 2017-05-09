@@ -8,8 +8,6 @@ import (
 	"github.com/tendermint/abci/types"
 	crypto "github.com/tendermint/go-crypto"
 	cmn "github.com/tendermint/tmlibs/common"
-	"github.com/tendermint/tmlibs/log"
-	"github.com/tendermint/tmlibs/process"
 )
 
 func InitChain(client abcicli.Client) {
