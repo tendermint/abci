@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/tendermint/abci/client"
-	test "github.com/tendermint/abci/tests/abciserver"
+	servertest "github.com/tendermint/abci/tests/server"
 	"github.com/tendermint/abci/types"
 	"github.com/tendermint/abci/version"
 	"github.com/tendermint/tmlibs/log"
@@ -185,26 +185,34 @@ func persistentArgs(line []byte) []string {
 
 func cmdTest(app *cli.App, c *cli.Context) error {
 	fmt.Println("Running tests")
-	fmt.Printf("\n")
 
-	// Initially I want to call every available method on the ABCI and check whether it returns
-	// the correct type and whether it is implemented
-	// Then I want to test the counter app and whether it handles all cases correctly.
-	test.SetOption(client, "serial", "on")
-	test.Commit(client, nil)
-	test.DeliverTx(client, []byte("abc"), types.CodeType_BadNonce, nil)
-	test.Commit(client, nil)
-	test.DeliverTx(client, []byte{0x00}, types.CodeType_OK, nil)
-	test.Commit(client, []byte{0, 0, 0, 0, 0, 0, 0, 1})
-	test.DeliverTx(client, []byte{0x00}, types.CodeType_BadNonce, nil)
-	test.DeliverTx(client, []byte{0x01}, types.CodeType_OK, nil)
-	test.DeliverTx(client, []byte{0x00, 0x02}, types.CodeType_OK, nil)
-	test.DeliverTx(client, []byte{0x00, 0x03}, types.CodeType_OK, nil)
-	test.DeliverTx(client, []byte{0x00, 0x00, 0x04}, types.CodeType_OK, nil)
-	test.DeliverTx(client, []byte{0x00, 0x00, 0x06}, types.CodeType_BadNonce, nil)
-	test.Commit(client, []byte{0, 0, 0, 0, 0, 0, 0, 5})
-
-	fmt.Printf("Test run successfully")
+	servertest.InitChain(client)
+	fmt.Println("")
+	servertest.SetOption(client, "serial", "on")
+	fmt.Println("")
+	servertest.Commit(client, []byte("3318CDD0292A277E3BC1C2041BA23A4795B0FD85"))
+	fmt.Println("")
+	servertest.DeliverTx(client, []byte("abc"), types.CodeType_OK, nil)
+	fmt.Println("")
+	servertest.Commit(client, nil)
+	fmt.Println("")
+	servertest.DeliverTx(client, []byte{0x00}, types.CodeType_OK, nil)
+	fmt.Println("")
+	servertest.Commit(client, []byte{0, 0, 0, 0, 0, 0, 0, 1})
+	fmt.Println("")
+	servertest.DeliverTx(client, []byte{0x00}, types.CodeType_BadNonce, nil)
+	fmt.Println("")
+	servertest.DeliverTx(client, []byte{0x01}, types.CodeType_OK, nil)
+	fmt.Println("")
+	servertest.DeliverTx(client, []byte{0x00, 0x02}, types.CodeType_OK, nil)
+	fmt.Println("")
+	servertest.DeliverTx(client, []byte{0x00, 0x03}, types.CodeType_OK, nil)
+	fmt.Println("")
+	servertest.DeliverTx(client, []byte{0x00, 0x00, 0x04}, types.CodeType_OK, nil)
+	fmt.Println("")
+	servertest.DeliverTx(client, []byte{0x00, 0x00, 0x06}, types.CodeType_BadNonce, nil)
+	fmt.Println("")
+	servertest.Commit(client, []byte{0, 0, 0, 0, 0, 0, 0, 5})
 	return nil
 }
 
