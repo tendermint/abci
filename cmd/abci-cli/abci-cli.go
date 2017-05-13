@@ -186,33 +186,39 @@ func persistentArgs(line []byte) []string {
 func cmdTest(app *cli.App, c *cli.Context) error {
 	fmt.Println("Running tests")
 
-	servertest.InitChain(client)
+	var err error
+
+	err = servertest.InitChain(client)
 	fmt.Println("")
-	servertest.SetOption(client, "serial", "on")
+	err = servertest.SetOption(client, "serial", "on")
 	fmt.Println("")
-	servertest.Commit(client, nil)
+	err = servertest.Commit(client, nil)
 	fmt.Println("")
-	servertest.DeliverTx(client, []byte("abc"), types.CodeType_BadNonce, nil)
+	err = servertest.DeliverTx(client, []byte("abc"), types.CodeType_BadNonce, nil)
 	fmt.Println("")
-	servertest.Commit(client, nil)
+	err = servertest.Commit(client, nil)
 	fmt.Println("")
-	servertest.DeliverTx(client, []byte{0x00}, types.CodeType_OK, nil)
+	err = servertest.DeliverTx(client, []byte{0x00}, types.CodeType_OK, nil)
 	fmt.Println("")
-	servertest.Commit(client, []byte{0, 0, 0, 0, 0, 0, 0, 1})
+	err = servertest.Commit(client, []byte{0, 0, 0, 0, 0, 0, 0, 1})
 	fmt.Println("")
-	servertest.DeliverTx(client, []byte{0x00}, types.CodeType_BadNonce, nil)
+	err = servertest.DeliverTx(client, []byte{0x00}, types.CodeType_BadNonce, nil)
 	fmt.Println("")
-	servertest.DeliverTx(client, []byte{0x01}, types.CodeType_OK, nil)
+	err = servertest.DeliverTx(client, []byte{0x01}, types.CodeType_OK, nil)
 	fmt.Println("")
-	servertest.DeliverTx(client, []byte{0x00, 0x02}, types.CodeType_OK, nil)
+	err = servertest.DeliverTx(client, []byte{0x00, 0x02}, types.CodeType_OK, nil)
 	fmt.Println("")
-	servertest.DeliverTx(client, []byte{0x00, 0x03}, types.CodeType_OK, nil)
+	err = servertest.DeliverTx(client, []byte{0x00, 0x03}, types.CodeType_OK, nil)
 	fmt.Println("")
-	servertest.DeliverTx(client, []byte{0x00, 0x00, 0x04}, types.CodeType_OK, nil)
+	err = servertest.DeliverTx(client, []byte{0x00, 0x00, 0x04}, types.CodeType_OK, nil)
 	fmt.Println("")
-	servertest.DeliverTx(client, []byte{0x00, 0x00, 0x06}, types.CodeType_BadNonce, nil)
+	err = servertest.DeliverTx(client, []byte{0x00, 0x00, 0x06}, types.CodeType_BadNonce, nil)
 	fmt.Println("")
-	servertest.Commit(client, []byte{0, 0, 0, 0, 0, 0, 0, 5})
+	err = servertest.Commit(client, []byte{0, 0, 0, 0, 0, 0, 0, 5})
+
+	if err != nil {
+		return errors.New("Some checks didn't pass, please use the cli to see the exact failures.")
+	}
 	return nil
 }
 
