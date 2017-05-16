@@ -149,6 +149,7 @@ func before(c *cli.Context) error {
 			os.Exit(1)
 		}
 		client.SetLogger(logger.With("module", "abci-client"))
+		client.Start()
 	}
 	return nil
 }

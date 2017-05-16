@@ -33,8 +33,7 @@ func NewGRPCClient(addr string, mustConnect bool) (*grpcClient, error) {
 		mustConnect: mustConnect,
 	}
 	cli.BaseService = *cmn.NewBaseService(nil, "grpcClient", cli)
-	_, err := cli.Start() // Just start it, it's confusing for callers to remember to start.
-	return cli, err
+	return cli, nil
 }
 
 func dialerFunc(addr string, timeout time.Duration) (net.Conn, error) {

@@ -20,6 +20,7 @@ func TestChainAware(t *testing.T) {
 		t.Fatal(err)
 	}
 	srv.SetLogger(log.TestingLogger().With("module", "abci-server"))
+	srv.Start()
 	defer srv.Stop()
 
 	// Connect to the socket

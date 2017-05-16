@@ -16,7 +16,7 @@ function testExample() {
 	echo "Example $N"
 	$APP &> /dev/null &
 	sleep 2
-	abci-cli --verbose batch < "$INPUT" > "${INPUT}.out.new"
+	abci-cli --verbose batch < "$INPUT" | sed -n '1!p' > "${INPUT}.out.new"
 	killall "$APP"
 
 	pre=$(shasum < "${INPUT}.out")

@@ -43,6 +43,7 @@ func testStream(t *testing.T, app types.Application) {
 		t.Fatalf("Error starting socket server: %v", err.Error())
 	}
 	server.SetLogger(log.TestingLogger().With("module", "abci-server"))
+	server.Start()
 	defer server.Stop()
 
 	// Connect to the socket
@@ -117,6 +118,7 @@ func testGRPCSync(t *testing.T, app *types.GRPCApplication) {
 		t.Fatalf("Error starting GRPC server: %v", err.Error())
 	}
 	server.SetLogger(log.TestingLogger().With("module", "abci-server"))
+	server.Start()
 	defer server.Stop()
 
 	// Connect to the socket

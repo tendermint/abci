@@ -40,6 +40,7 @@ func startClient(abciType string) abcicli.Client {
 	}
 	logger := log.NewTMLogger(log.NewSyncWriter(os.Stdout))
 	client.SetLogger(logger.With("module", "abcicli"))
+	client.Start()
 	return client
 }
 
