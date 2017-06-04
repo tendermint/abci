@@ -9,7 +9,8 @@ import (
 	"os"
 	"strings"
 
-	abcicli "github.com/tendermint/abci/client"
+	"github.com/tendermint/abci/client"
+	servertest "github.com/tendermint/abci/tests/server"
 	"github.com/tendermint/abci/types"
 	"github.com/tendermint/abci/version"
 	"github.com/tendermint/tmlibs/log"
@@ -39,7 +40,6 @@ var client abcicli.Client
 var logger log.Logger
 
 func main() {
-
 	//workaround for the cli library (https://github.com/urfave/cli/issues/565)
 	cli.OsExiter = func(_ int) {}
 
@@ -143,6 +143,13 @@ func main() {
 				},
 			},
 		},
+		{
+			Name:  "test",
+			Usage: "Runs the integration tests",
+			Action: func(c *cli.Context) error {
+				return cmdTest(app, c)
+			},
+		},
 	}
 	app.Before = before
 	err := app.Run(os.Args)
@@ -150,7 +157,6 @@ func main() {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
-
 }
 
 func before(c *cli.Context) error {
@@ -195,6 +201,45 @@ func persistentArgs(line []byte) []string {
 }
 
 //--------------------------------------------------------------------------------
+
+func cmdTest(app *cli.App, c *cli.Context) error {
+	fmt.Println("Running tests")
+
+	var err error
+
+	err = servertest.InitChain(client)
+	fmt.Println("")
+	err = servertest.SetOption(client, "serial", "on")
+	fmt.Println("")
+	err = servertest.Commit(client, nil)
+	fmt.Println("")
+	err = servertest.DeliverTx(client, []byte("abc"), types.CodeType_BadNonce, nil)
+	fmt.Println("")
+	err = servertest.Commit(client, nil)
+	fmt.Println("")
+	err = servertest.DeliverTx(client, []byte{0x00}, types.CodeType_OK, nil)
+	fmt.Println("")
+	err = servertest.Commit(client, []byte{0, 0, 0, 0, 0, 0, 0, 1})
+	fmt.Println("")
+	err = servertest.DeliverTx(client, []byte{0x00}, types.CodeType_BadNonce, nil)
+	fmt.Println("")
+	err = servertest.DeliverTx(client, []byte{0x01}, types.CodeType_OK, nil)
+	fmt.Println("")
+	err = servertest.DeliverTx(client, []byte{0x00, 0x02}, types.CodeType_OK, nil)
+	fmt.Println("")
+	err = servertest.DeliverTx(client, []byte{0x00, 0x03}, types.CodeType_OK, nil)
+	fmt.Println("")
+	err = servertest.DeliverTx(client, []byte{0x00, 0x00, 0x04}, types.CodeType_OK, nil)
+	fmt.Println("")
+	err = servertest.DeliverTx(client, []byte{0x00, 0x00, 0x06}, types.CodeType_BadNonce, nil)
+	fmt.Println("")
+	err = servertest.Commit(client, []byte{0, 0, 0, 0, 0, 0, 0, 5})
+
+	if err != nil {
+		return errors.New("Some checks didn't pass, please use the cli to see the exact failures.")
+	}
+	return nil
+}
 
 func cmdBatch(app *cli.App, c *cli.Context) error {
 	bufReader := bufio.NewReader(os.Stdin)

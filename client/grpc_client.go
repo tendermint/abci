@@ -43,7 +43,6 @@ func dialerFunc(addr string, timeout time.Duration) (net.Conn, error) {
 func (cli *grpcClient) OnStart() error {
 	cli.BaseService.OnStart()
 RETRY_LOOP:
-
 	for {
 		conn, err := grpc.Dial(cli.addr, grpc.WithInsecure(), grpc.WithDialer(dialerFunc))
 		if err != nil {
@@ -76,8 +75,8 @@ func (cli *grpcClient) OnStop() {
 	cli.mtx.Lock()
 	defer cli.mtx.Unlock()
 	// TODO: how to close conn? its not a net.Conn and grpc doesn't expose a Close()
-	/*if cli.conn != nil {
-		cli.conn.Close()
+	/*if cli.client.conn != nil {
+		cli.client.conn.Close()
 	}*/
 }
 

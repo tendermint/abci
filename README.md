@@ -185,3 +185,6 @@ Multiple example apps are included:
 - the `counter` application, which illustrates nonce checking in txs
 - the `dummy` application, which illustrates a simple key-value merkle tree
 - the `dummy --persistent` application, which augments the dummy with persistence and validator set changes
+
+When you are developing an implementation of the ABCI server in your favourite language, we provide the `abci-cli test`
+command that allows you to run our tests against your own ABCI server. Please make sure that your server supports at least the TSP protocol, and optionally gRPC.
