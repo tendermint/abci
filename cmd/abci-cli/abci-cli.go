@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/hex"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -156,12 +155,27 @@ func main() {
 			Action: func(c *cli.Context) error {
 				return cmdCounter(c)
 			},
+			Flags: []cli.Flag{
+				cli.BoolFlag{
+					Name: "serial",
+					// False by default, see https://github.com/urfave/cli/issues/650
+					// Value: false,
+					Usage: "Enforce incrementing (serial) transactions",
+				},
+			},
 		},
 		{
 			Name:  "dummy",
 			Usage: "",
 			Action: func(c *cli.Context) error {
 				return cmdDummy(c)
+			},
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "persist",
+					Value: "",
+					Usage: "directory to use for a databse",
+				},
 			},
 		},
 	}
@@ -384,16 +398,12 @@ func cmdQuery(c *cli.Context) error {
 
 // Counter the example app
 func cmdCounter(c *cli.Context) error {
-	addrPtr := flag.String("addr", "tcp://0.0.0.0:46658", "Listen address")
-	abciPtr := flag.String("abci", "socket", "ABCI server: socket | grpc")
-	serialPtr := flag.Bool("serial", false, "Enforce incrementing (serial) txs")
-	flag.Parse()
-	app := counter.NewCounterApplication(*serialPtr)
+	app := counter.NewCounterApplication(c.Bool("serial"))
 
 	logger := log.NewTMLogger(log.NewSyncWriter(os.Stdout))
 
 	// Start the listener
-	srv, err := server.NewServer(*addrPtr, *abciPtr, app)
+	srv, err := server.NewServer(c.String("address"), c.String("abci"), app)
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
@@ -415,24 +425,19 @@ func cmdCounter(c *cli.Context) error {
 // Dummy the example app
 func cmdDummy(c *cli.Context) error {
 
-	addrPtr := flag.String("addr", "tcp://0.0.0.0:46658", "Listen address")
-	abciPtr := flag.String("abci", "socket", "socket | grpc")
-	persistencePtr := flag.String("persist", "", "directory to use for a database")
-	flag.Parse()
-
 	logger := log.NewTMLogger(log.NewSyncWriter(os.Stdout))
 
 	// Create the application - in memory or persisted to disk
 	var app types.Application
-	if *persistencePtr == "" {
+	if c.String("persist") == "" {
 		app = dummy.NewDummyApplication()
 	} else {
-		app = dummy.NewPersistentDummyApplication(*persistencePtr)
+		app = dummy.NewPersistentDummyApplication(c.String("persist"))
 		app.(*dummy.PersistentDummyApplication).SetLogger(logger.With("module", "dummy"))
 	}
 
 	// Start the listener
-	srv, err := server.NewServer(*addrPtr, *abciPtr, app)
+	srv, err := server.NewServer(c.String("address"), c.String("abci"), app)
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
