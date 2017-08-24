@@ -4,14 +4,20 @@ import (
 	"bufio"
 	"encoding/hex"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 
 	abcicli "github.com/tendermint/abci/client"
+	"github.com/tendermint/abci/example/counter"
+	"github.com/tendermint/abci/example/dummy"
+	"github.com/tendermint/abci/server"
 	"github.com/tendermint/abci/types"
 	"github.com/tendermint/abci/version"
+
+	cmn "github.com/tendermint/tmlibs/common"
 	"github.com/tendermint/tmlibs/log"
 	"github.com/urfave/cli"
 )
@@ -141,6 +147,21 @@ func main() {
 					Name:  "prove",
 					Usage: "Whether or not to return a merkle proof of the query result",
 				},
+			},
+		},
+		// app examples
+		{
+			Name:  "counter",
+			Usage: "",
+			Action: func(c *cli.Context) error {
+				return cmdCounter(c)
+			},
+		},
+		{
+			Name:  "dummy",
+			Usage: "",
+			Action: func(c *cli.Context) error {
+				return cmdDummy(c)
 			},
 		},
 	}
@@ -358,6 +379,76 @@ func cmdQuery(c *cli.Context) error {
 			Proof:  resQuery.Proof,
 		},
 	})
+	return nil
+}
+
+// Counter the example app
+func cmdCounter(c *cli.Context) error {
+	addrPtr := flag.String("addr", "tcp://0.0.0.0:46658", "Listen address")
+	abciPtr := flag.String("abci", "socket", "ABCI server: socket | grpc")
+	serialPtr := flag.Bool("serial", false, "Enforce incrementing (serial) txs")
+	flag.Parse()
+	app := counter.NewCounterApplication(*serialPtr)
+
+	logger := log.NewTMLogger(log.NewSyncWriter(os.Stdout))
+
+	// Start the listener
+	srv, err := server.NewServer(*addrPtr, *abciPtr, app)
+	if err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
+	srv.SetLogger(logger.With("module", "abci-server"))
+	if _, err := srv.Start(); err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
+
+	// Wait forever
+	cmn.TrapSignal(func() {
+		// Cleanup
+		srv.Stop()
+	})
+	return nil
+}
+
+// Dummy the example app
+func cmdDummy(c *cli.Context) error {
+
+	addrPtr := flag.String("addr", "tcp://0.0.0.0:46658", "Listen address")
+	abciPtr := flag.String("abci", "socket", "socket | grpc")
+	persistencePtr := flag.String("persist", "", "directory to use for a database")
+	flag.Parse()
+
+	logger := log.NewTMLogger(log.NewSyncWriter(os.Stdout))
+
+	// Create the application - in memory or persisted to disk
+	var app types.Application
+	if *persistencePtr == "" {
+		app = dummy.NewDummyApplication()
+	} else {
+		app = dummy.NewPersistentDummyApplication(*persistencePtr)
+		app.(*dummy.PersistentDummyApplication).SetLogger(logger.With("module", "dummy"))
+	}
+
+	// Start the listener
+	srv, err := server.NewServer(*addrPtr, *abciPtr, app)
+	if err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
+	srv.SetLogger(logger.With("module", "abci-server"))
+	if _, err := srv.Start(); err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
+
+	// Wait forever
+	cmn.TrapSignal(func() {
+		// Cleanup
+		srv.Stop()
+	})
+
 	return nil
 }
 
