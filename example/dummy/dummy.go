@@ -4,15 +4,14 @@ import (
 	"strings"
 
 	"github.com/tendermint/abci/types"
-	"github.com/tendermint/merkleeyes/iavl"
+	"github.com/tendermint/iavl"
 	cmn "github.com/tendermint/tmlibs/common"
-	"github.com/tendermint/tmlibs/merkle"
 )
 
 type DummyApplication struct {
 	types.BaseApplication
 
-	state merkle.Tree
+	state *iavl.IAVLTree
 }
 
 func NewDummyApplication() *DummyApplication {
@@ -46,12 +45,12 @@ func (app *DummyApplication) Commit() types.Result {
 
 func (app *DummyApplication) Query(reqQuery types.RequestQuery) (resQuery types.ResponseQuery) {
 	if reqQuery.Prove {
-		value, proof, exists := app.state.Proof(reqQuery.Data)
+		value, proof, err := app.state.GetWithProof(reqQuery.Data)
 		resQuery.Index = -1 // TODO make Proof return index
 		resQuery.Key = reqQuery.Data
 		resQuery.Value = value
-		resQuery.Proof = proof
-		if exists {
+		resQuery.Proof = proof.Bytes()
+		if err == nil {
 			resQuery.Log = "exists"
 		} else {
 			resQuery.Log = "does not exist"
