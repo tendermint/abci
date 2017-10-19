@@ -5,15 +5,15 @@ import:
   - proto
 - package: github.com/pkg/errors
 - package: github.com/tendermint/go-crypto
-  version: develop
+  version: v0.2.0
 - package: github.com/tendermint/go-wire
-  version: develop
+  version: v0.6.2
 - package: github.com/tendermint/merkleeyes
-  version: develop
+  version: v0.2.4
   subpackages:
   - iavl
 - package: github.com/tendermint/tmlibs
-  version: develop
+  version: v0.2.2
   subpackages:
   - common
   - db
