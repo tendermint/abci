@@ -9,7 +9,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/tendermint/abci/types"
 	wire "github.com/tendermint/go-wire"
-	"github.com/tendermint/merkleeyes/iavl"
+	"github.com/tendermint/iavl"
 	cmn "github.com/tendermint/tmlibs/common"
 	dbm "github.com/tendermint/tmlibs/db"
 	"github.com/tendermint/tmlibs/log"
@@ -37,10 +37,10 @@ type PersistentDummyApplication struct {
 
 func NewPersistentDummyApplication(dbDir string) *PersistentDummyApplication {
 	db := dbm.NewDB("dummy", "leveldb", dbDir)
-	lastBlock := LoadLastBlock(db)
+	// lastBlock := LoadLastBlock(db)
 
 	stateTree := iavl.NewIAVLTree(0, db)
-	stateTree.Load(lastBlock.AppHash)
+	// stateTree.Load(lastBlock.AppHash)
 
 	// log.Notice("Loaded state", "block", lastBlock.Height, "root", stateTree.Hash())
 
@@ -87,7 +87,8 @@ func (app *PersistentDummyApplication) CheckTx(tx []byte) types.Result {
 
 func (app *PersistentDummyApplication) Commit() types.Result {
 	// Save
-	appHash := app.app.state.Save()
+	// appHash := app.app.state.Save()
+	appHash := app.app.state.Hash()
 	app.logger.Info("Saved state", "root", appHash)
 
 	lastBlock := LastBlockInfo{
