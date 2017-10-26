@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -57,6 +58,11 @@ func NewSocketClient(addr string, mustConnect bool) *socketClient {
 }
 
 func (cli *socketClient) OnStart() error {
+
+	if len(strings.SplitN(cli.addr, "://", 2)) < 2 {
+		return fmt.Errorf("Missing protocol (ex. tcp://) in %v", cli.addr)
+	}
+
 	if err := cli.BaseService.OnStart(); err != nil {
 		return err
 	}
