@@ -7,10 +7,13 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
 	abcicli "github.com/tendermint/abci/client"
 	abciserver "github.com/tendermint/abci/server"
 	"github.com/tendermint/abci/types"
+
 	"github.com/tendermint/iavl"
+
 	cmn "github.com/tendermint/tmlibs/common"
 	"github.com/tendermint/tmlibs/log"
 )
@@ -168,7 +171,9 @@ func TestValSetChanges(t *testing.T) {
 
 }
 
-func makeApplyBlock(t *testing.T, dummy types.Application, heightInt int, diff []*types.Validator, txs ...[]byte) {
+func makeApplyBlock(t *testing.T, dummy types.Application, heightInt int, diff []*types.Validator,
+	txs ...[]byte) {
+
 	// make and apply block
 	height := uint64(heightInt)
 	hash := []byte("foo")
@@ -200,12 +205,15 @@ func valsEqual(t *testing.T, vals1, vals2 []*types.Validator) {
 		v2 := vals2[i]
 		if !bytes.Equal(v1.PubKey, v2.PubKey) ||
 			v1.Power != v2.Power {
-			t.Fatalf("vals dont match at index %d. got %X/%d , expected %X/%d", i, v2.PubKey, v2.Power, v1.PubKey, v1.Power)
+			t.Fatalf("vals dont match at index %d. got %X/%d , expected %X/%d", i, v2.PubKey,
+				v2.Power, v1.PubKey, v1.Power)
 		}
 	}
 }
 
-func makeSocketClientServer(app types.Application, name string) (abcicli.Client, cmn.Service, error) {
+func makeSocketClientServer(app types.Application,
+	name string) (abcicli.Client, cmn.Service, error) {
+
 	// Start the listener
 	socket := cmn.Fmt("unix://%s.sock", name)
 	logger := log.TestingLogger()
@@ -217,8 +225,7 @@ func makeSocketClientServer(app types.Application, name string) (abcicli.Client,
 	}
 
 	// Connect to the socket
-	client := abcicli.NewSocketClient(socket, false)
-	client.SetLogger(logger.With("module", "abci-client"))
+	client := abcicli.NewSocketClient(socket, false, logger.With("module", "abci-client"))
 	if _, err := client.Start(); err != nil {
 		server.Stop()
 		return nil, nil, err
@@ -239,8 +246,7 @@ func makeGRPCClientServer(app types.Application, name string) (abcicli.Client, c
 		return nil, nil, err
 	}
 
-	client := abcicli.NewGRPCClient(socket, true)
-	client.SetLogger(logger.With("module", "abci-client"))
+	client := abcicli.NewGRPCClient(socket, true, logger.With("module", "abci-client"))
 	if _, err := client.Start(); err != nil {
 		server.Stop()
 		return nil, nil, err

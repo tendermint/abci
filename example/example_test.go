@@ -15,6 +15,7 @@ import (
 	"github.com/tendermint/abci/example/dummy"
 	abciserver "github.com/tendermint/abci/server"
 	"github.com/tendermint/abci/types"
+
 	cmn "github.com/tendermint/tmlibs/common"
 	"github.com/tendermint/tmlibs/log"
 )
@@ -46,8 +47,8 @@ func testStream(t *testing.T, app types.Application) {
 	defer server.Stop()
 
 	// Connect to the socket
-	client := abcicli.NewSocketClient("unix://test.sock", false)
-	client.SetLogger(log.TestingLogger().With("module", "abci-client"))
+	client := abcicli.NewSocketClient("unix://test.sock", false,
+		log.TestingLogger().With("module", "abci-client"))
 	if _, err := client.Start(); err != nil {
 		t.Fatalf("Error starting socket client: %v", err.Error())
 	}
@@ -64,7 +65,8 @@ func testStream(t *testing.T, app types.Application) {
 				t.Error("DeliverTx failed with ret_code", r.DeliverTx.Code)
 			}
 			if counter > numDeliverTxs {
-				t.Fatalf("Too many DeliverTx responses. Got %d, expected %d", counter, numDeliverTxs)
+				t.Fatalf("Too many DeliverTx responses. Got %d, expected %d", counter,
+					numDeliverTxs)
 			}
 			if counter == numDeliverTxs {
 				go func() {
@@ -130,7 +132,8 @@ func testGRPCSync(t *testing.T, app *types.GRPCApplication) {
 	// Write requests
 	for counter := 0; counter < numDeliverTxs; counter++ {
 		// Send request
-		response, err := client.DeliverTx(context.Background(), &types.RequestDeliverTx{[]byte("test")})
+		response, err := client.DeliverTx(context.Background(),
+			&types.RequestDeliverTx{[]byte("test")})
 		if err != nil {
 			t.Fatalf("Error in GRPC DeliverTx: %v", err.Error())
 		}
