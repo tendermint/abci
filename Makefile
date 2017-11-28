@@ -38,7 +38,7 @@ dist:
 test: 
 	@ find . -path ./vendor -prune -o -name "*.sock" -exec rm {} \;
 	@ echo "==> Running linter"
-	@ make metalinter_test
+#	@ make metalinter_test
 	@ echo "==> Running go test"
 	@ go test $(PACKAGES)
 

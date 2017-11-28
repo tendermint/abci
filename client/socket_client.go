@@ -10,8 +10,11 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+
 	"github.com/tendermint/abci/types"
+
 	cmn "github.com/tendermint/tmlibs/common"
+	"github.com/tendermint/tmlibs/log"
 )
 
 const reqQueueSize = 256 // TODO make configurable
@@ -39,7 +42,7 @@ type socketClient struct {
 
 }
 
-func NewSocketClient(addr string, mustConnect bool) *socketClient {
+func NewSocketClient(addr string, mustConnect bool, logger log.Logger) *socketClient {
 	cli := &socketClient{
 		reqQueue:    make(chan *ReqRes, reqQueueSize),
 		flushTimer:  cmn.NewThrottleTimer("socketClient", flushThrottleMS),
@@ -49,7 +52,7 @@ func NewSocketClient(addr string, mustConnect bool) *socketClient {
 		reqSent: list.New(),
 		resCb:   nil,
 	}
-	cli.BaseService = *cmn.NewBaseService(nil, "socketClient", cli)
+	cli.BaseService = *cmn.NewBaseService(logger, "socketClient", cli)
 	return cli
 }
 
