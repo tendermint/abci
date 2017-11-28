@@ -15,11 +15,11 @@ func TestChainAware(t *testing.T) {
 	app := NewChainAwareApplication()
 
 	// Start the listener
-	srv, err := server.NewServer("unix://test.sock", "socket", app)
+	srv, err := server.NewServer("unix://test.sock", "socket", app,
+		log.TestingLogger().With("module", "abci-server"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv.SetLogger(log.TestingLogger().With("module", "abci-server"))
 	if _, err := srv.Start(); err != nil {
 		t.Fatal(err.Error())
 	}

@@ -8,7 +8,9 @@ import (
 	"sync"
 
 	"github.com/tendermint/abci/types"
+
 	cmn "github.com/tendermint/tmlibs/common"
+	"github.com/tendermint/tmlibs/log"
 )
 
 // var maxNumberConnections = 2
@@ -28,7 +30,9 @@ type SocketServer struct {
 	app    types.Application
 }
 
-func NewSocketServer(protoAddr string, app types.Application) cmn.Service {
+func NewSocketServer(protoAddr string, app types.Application,
+	logger log.Logger) cmn.Service {
+
 	proto, addr := cmn.ProtocolAndAddress(protoAddr)
 	s := &SocketServer{
 		proto:    proto,
@@ -37,7 +41,7 @@ func NewSocketServer(protoAddr string, app types.Application) cmn.Service {
 		app:      app,
 		conns:    make(map[int]net.Conn),
 	}
-	s.BaseService = *cmn.NewBaseService(nil, "ABCIServer", s)
+	s.BaseService = *cmn.NewBaseService(logger, "ABCIServer", s)
 	return s
 }
 

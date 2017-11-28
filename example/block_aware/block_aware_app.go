@@ -6,6 +6,7 @@ import (
 
 	"github.com/tendermint/abci/server"
 	"github.com/tendermint/abci/types"
+
 	cmn "github.com/tendermint/tmlibs/common"
 	"github.com/tendermint/tmlibs/log"
 )
@@ -19,12 +20,12 @@ func main() {
 	logger := log.NewTMLogger(log.NewSyncWriter(os.Stdout))
 
 	// Start the listener
-	srv, err := server.NewServer(*addrPtr, *abciPtr, NewChainAwareApplication())
+	srv, err := server.NewServer(*addrPtr, *abciPtr, NewChainAwareApplication(),
+		logger.With("module", "abci-server"))
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
-	srv.SetLogger(logger.With("module", "abci-server"))
 	if _, err := srv.Start(); err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)

@@ -437,11 +437,10 @@ func cmdCounter(cmd *cobra.Command, args []string) error {
 	logger := log.NewTMLogger(log.NewSyncWriter(os.Stdout))
 
 	// Start the listener
-	srv, err := server.NewServer(addrC, abci, app)
+	srv, err := server.NewServer(addrC, abci, app, logger.With("module", "abci-server"))
 	if err != nil {
 		return err
 	}
-	srv.SetLogger(logger.With("module", "abci-server"))
 	if _, err := srv.Start(); err != nil {
 		return err
 	}
@@ -467,11 +466,10 @@ func cmdDummy(cmd *cobra.Command, args []string) error {
 	}
 
 	// Start the listener
-	srv, err := server.NewServer(addrD, abci, app)
+	srv, err := server.NewServer(addrD, abci, app, logger.With("module", "abci-server"))
 	if err != nil {
 		return err
 	}
-	srv.SetLogger(logger.With("module", "abci-server"))
 	if _, err := srv.Start(); err != nil {
 		return err
 	}
