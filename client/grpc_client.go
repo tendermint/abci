@@ -7,10 +7,13 @@ import (
 	"time"
 
 	context "golang.org/x/net/context"
+
 	grpc "google.golang.org/grpc"
 
 	"github.com/tendermint/abci/types"
+
 	cmn "github.com/tendermint/tmlibs/common"
+	"github.com/tendermint/tmlibs/log"
 )
 
 // A stripped copy of the remoteClient that makes
@@ -27,12 +30,12 @@ type grpcClient struct {
 	resCb func(*types.Request, *types.Response) // listens to all callbacks
 }
 
-func NewGRPCClient(addr string, mustConnect bool) *grpcClient {
+func NewGRPCClient(addr string, mustConnect bool, logger log.Logger) *grpcClient {
 	cli := &grpcClient{
 		addr:        addr,
 		mustConnect: mustConnect,
 	}
-	cli.BaseService = *cmn.NewBaseService(nil, "grpcClient", cli)
+	cli.BaseService = *cmn.NewBaseService(logger, "grpcClient", cli)
 	return cli
 }
 

@@ -10,16 +10,17 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	abcicli "github.com/tendermint/abci/client"
 	"github.com/tendermint/abci/example/counter"
 	"github.com/tendermint/abci/example/dummy"
 	"github.com/tendermint/abci/server"
 	"github.com/tendermint/abci/types"
 	"github.com/tendermint/abci/version"
+
 	cmn "github.com/tendermint/tmlibs/common"
 	"github.com/tendermint/tmlibs/log"
-
-	"github.com/spf13/cobra"
 )
 
 // Structure for data passed to print response.
@@ -83,11 +84,11 @@ var RootCmd = &cobra.Command{
 		}
 		if client == nil {
 			var err error
-			client, err = abcicli.NewClient(address, abci, false)
+			client, err = abcicli.NewClient(address, abci, false,
+				logger.With("module", "abci-client"))
 			if err != nil {
 				return err
 			}
-			client.SetLogger(logger.With("module", "abci-client"))
 			if _, err := client.Start(); err != nil {
 				return err
 			}

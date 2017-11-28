@@ -11,12 +11,13 @@ import (
 
 	"golang.org/x/net/context"
 
+	cmn "github.com/tendermint/tmlibs/common"
+	"github.com/tendermint/tmlibs/log"
+
 	abcicli "github.com/tendermint/abci/client"
 	"github.com/tendermint/abci/example/dummy"
 	abciserver "github.com/tendermint/abci/server"
 	"github.com/tendermint/abci/types"
-	cmn "github.com/tendermint/tmlibs/common"
-	"github.com/tendermint/tmlibs/log"
 )
 
 func TestDummy(t *testing.T) {
@@ -46,8 +47,8 @@ func testStream(t *testing.T, app types.Application) {
 	defer server.Stop()
 
 	// Connect to the socket
-	client := abcicli.NewSocketClient("unix://test.sock", false)
-	client.SetLogger(log.TestingLogger().With("module", "abci-client"))
+	client := abcicli.NewSocketClient("unix://test.sock", false,
+		log.TestingLogger().With("module", "abci-client"))
 	if _, err := client.Start(); err != nil {
 		t.Fatalf("Error starting socket client: %v", err.Error())
 	}

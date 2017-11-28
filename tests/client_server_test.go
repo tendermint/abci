@@ -20,7 +20,7 @@ func TestClientServerNoAddrPrefix(t *testing.T) {
 	_, err = server.Start()
 	assert.NoError(t, err, "expected no error on server.Start")
 
-	client, err := abciclient.NewClient(addr, transport, true)
+	client, err := abciclient.NewClient(addr, transport, true, nil)
 	assert.NoError(t, err, "expected no error on NewClient")
 	_, err = client.Start()
 	assert.NoError(t, err, "expected no error on client.Start")
