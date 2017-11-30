@@ -20,10 +20,11 @@ install_protoc:
 	go get github.com/golang/protobuf/protoc-gen-go
 
 protoc:
+	protoc --go_out=plugins=grpc:. types/*.proto
+	go run types/protoreplace/protoreplace.go
 	## On "error while loading shared libraries: libprotobuf.so.14: cannot open shared object file: No such file or directory"
 	##   ldconfig (may require sudo)
 	## https://stackoverflow.com/a/25518702
-	protoc --go_out=plugins=grpc:. types/*.proto
 
 install:
 	@ go install ./cmd/...
@@ -67,6 +68,7 @@ get_vendor_deps: ensure_tools
 
 metalinter:
 	protoc --lint_out=. types/*.proto
+	go run types/protoreplace/protoreplace.go
 	gometalinter --vendor --deadline=600s --enable-all --disable=lll ./...
 
 metalinter_test:
