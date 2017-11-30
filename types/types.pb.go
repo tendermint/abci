@@ -43,6 +43,7 @@ It has these top-level messages:
 //nolint: gas
 package types
 
+import "github.com/tendermint/go-wire/data"
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
@@ -657,7 +658,7 @@ func (m *RequestSetOption) GetValue() string {
 }
 
 type RequestDeliverTx struct {
-	Tx []byte `protobuf:"bytes,1,opt,name=tx,proto3" json:"tx,omitempty"`
+	Tx data.Bytes `protobuf:"bytes,1,opt,name=tx,proto3" json:"tx,omitempty"`
 }
 
 func (m *RequestDeliverTx) Reset()                    { *m = RequestDeliverTx{} }
@@ -665,7 +666,7 @@ func (m *RequestDeliverTx) String() string            { return proto.CompactText
 func (*RequestDeliverTx) ProtoMessage()               {}
 func (*RequestDeliverTx) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5} }
 
-func (m *RequestDeliverTx) GetTx() []byte {
+func (m *RequestDeliverTx) GetTx() data.Bytes {
 	if m != nil {
 		return m.Tx
 	}
@@ -673,7 +674,7 @@ func (m *RequestDeliverTx) GetTx() []byte {
 }
 
 type RequestCheckTx struct {
-	Tx []byte `protobuf:"bytes,1,opt,name=tx,proto3" json:"tx,omitempty"`
+	Tx data.Bytes `protobuf:"bytes,1,opt,name=tx,proto3" json:"tx,omitempty"`
 }
 
 func (m *RequestCheckTx) Reset()                    { *m = RequestCheckTx{} }
@@ -681,7 +682,7 @@ func (m *RequestCheckTx) String() string            { return proto.CompactTextSt
 func (*RequestCheckTx) ProtoMessage()               {}
 func (*RequestCheckTx) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6} }
 
-func (m *RequestCheckTx) GetTx() []byte {
+func (m *RequestCheckTx) GetTx() data.Bytes {
 	if m != nil {
 		return m.Tx
 	}
@@ -689,10 +690,10 @@ func (m *RequestCheckTx) GetTx() []byte {
 }
 
 type RequestQuery struct {
-	Data   []byte `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
-	Path   string `protobuf:"bytes,2,opt,name=path" json:"path,omitempty"`
-	Height uint64 `protobuf:"varint,3,opt,name=height" json:"height,omitempty"`
-	Prove  bool   `protobuf:"varint,4,opt,name=prove" json:"prove,omitempty"`
+	Data   data.Bytes `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
+	Path   string     `protobuf:"bytes,2,opt,name=path" json:"path,omitempty"`
+	Height uint64     `protobuf:"varint,3,opt,name=height" json:"height,omitempty"`
+	Prove  bool       `protobuf:"varint,4,opt,name=prove" json:"prove,omitempty"`
 }
 
 func (m *RequestQuery) Reset()                    { *m = RequestQuery{} }
@@ -700,7 +701,7 @@ func (m *RequestQuery) String() string            { return proto.CompactTextStri
 func (*RequestQuery) ProtoMessage()               {}
 func (*RequestQuery) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{7} }
 
-func (m *RequestQuery) GetData() []byte {
+func (m *RequestQuery) GetData() data.Bytes {
 	if m != nil {
 		return m.Data
 	}
@@ -753,8 +754,8 @@ func (m *RequestInitChain) GetValidators() []*Validator {
 }
 
 type RequestBeginBlock struct {
-	Hash   []byte  `protobuf:"bytes,1,opt,name=hash,proto3" json:"hash,omitempty"`
-	Header *Header `protobuf:"bytes,2,opt,name=header" json:"header,omitempty"`
+	Hash   data.Bytes `protobuf:"bytes,1,opt,name=hash,proto3" json:"hash,omitempty"`
+	Header *Header    `protobuf:"bytes,2,opt,name=header" json:"header,omitempty"`
 }
 
 func (m *RequestBeginBlock) Reset()                    { *m = RequestBeginBlock{} }
@@ -762,7 +763,7 @@ func (m *RequestBeginBlock) String() string            { return proto.CompactTex
 func (*RequestBeginBlock) ProtoMessage()               {}
 func (*RequestBeginBlock) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{10} }
 
-func (m *RequestBeginBlock) GetHash() []byte {
+func (m *RequestBeginBlock) GetHash() data.Bytes {
 	if m != nil {
 		return m.Hash
 	}
@@ -1264,10 +1265,10 @@ func (*ResponseFlush) ProtoMessage()               {}
 func (*ResponseFlush) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{15} }
 
 type ResponseInfo struct {
-	Data             string `protobuf:"bytes,1,opt,name=data" json:"data,omitempty"`
-	Version          string `protobuf:"bytes,2,opt,name=version" json:"version,omitempty"`
-	LastBlockHeight  uint64 `protobuf:"varint,3,opt,name=last_block_height,json=lastBlockHeight" json:"last_block_height,omitempty"`
-	LastBlockAppHash []byte `protobuf:"bytes,4,opt,name=last_block_app_hash,json=lastBlockAppHash,proto3" json:"last_block_app_hash,omitempty"`
+	Data             string     `protobuf:"bytes,1,opt,name=data" json:"data,omitempty"`
+	Version          string     `protobuf:"bytes,2,opt,name=version" json:"version,omitempty"`
+	LastBlockHeight  uint64     `protobuf:"varint,3,opt,name=last_block_height,json=lastBlockHeight" json:"last_block_height,omitempty"`
+	LastBlockAppHash data.Bytes `protobuf:"bytes,4,opt,name=last_block_app_hash,json=lastBlockAppHash,proto3" json:"last_block_app_hash,omitempty"`
 }
 
 func (m *ResponseInfo) Reset()                    { *m = ResponseInfo{} }
@@ -1296,7 +1297,7 @@ func (m *ResponseInfo) GetLastBlockHeight() uint64 {
 	return 0
 }
 
-func (m *ResponseInfo) GetLastBlockAppHash() []byte {
+func (m *ResponseInfo) GetLastBlockAppHash() data.Bytes {
 	if m != nil {
 		return m.LastBlockAppHash
 	}
@@ -1320,10 +1321,10 @@ func (m *ResponseSetOption) GetLog() string {
 }
 
 type ResponseDeliverTx struct {
-	Code CodeType  `protobuf:"varint,1,opt,name=code,enum=types.CodeType" json:"code,omitempty"`
-	Data []byte    `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
-	Log  string    `protobuf:"bytes,3,opt,name=log" json:"log,omitempty"`
-	Tags []*KVPair `protobuf:"bytes,4,rep,name=tags" json:"tags,omitempty"`
+	Code CodeType   `protobuf:"varint,1,opt,name=code,enum=types.CodeType" json:"code,omitempty"`
+	Data data.Bytes `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	Log  string     `protobuf:"bytes,3,opt,name=log" json:"log,omitempty"`
+	Tags []*KVPair  `protobuf:"bytes,4,rep,name=tags" json:"tags,omitempty"`
 }
 
 func (m *ResponseDeliverTx) Reset()                    { *m = ResponseDeliverTx{} }
@@ -1338,7 +1339,7 @@ func (m *ResponseDeliverTx) GetCode() CodeType {
 	return CodeType_OK
 }
 
-func (m *ResponseDeliverTx) GetData() []byte {
+func (m *ResponseDeliverTx) GetData() data.Bytes {
 	if m != nil {
 		return m.Data
 	}
@@ -1360,11 +1361,11 @@ func (m *ResponseDeliverTx) GetTags() []*KVPair {
 }
 
 type ResponseCheckTx struct {
-	Code CodeType `protobuf:"varint,1,opt,name=code,enum=types.CodeType" json:"code,omitempty"`
-	Data []byte   `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
-	Log  string   `protobuf:"bytes,3,opt,name=log" json:"log,omitempty"`
-	Gas  uint64   `protobuf:"varint,4,opt,name=gas" json:"gas,omitempty"`
-	Fee  uint64   `protobuf:"varint,5,opt,name=fee" json:"fee,omitempty"`
+	Code CodeType   `protobuf:"varint,1,opt,name=code,enum=types.CodeType" json:"code,omitempty"`
+	Data data.Bytes `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	Log  string     `protobuf:"bytes,3,opt,name=log" json:"log,omitempty"`
+	Gas  uint64     `protobuf:"varint,4,opt,name=gas" json:"gas,omitempty"`
+	Fee  uint64     `protobuf:"varint,5,opt,name=fee" json:"fee,omitempty"`
 }
 
 func (m *ResponseCheckTx) Reset()                    { *m = ResponseCheckTx{} }
@@ -1379,7 +1380,7 @@ func (m *ResponseCheckTx) GetCode() CodeType {
 	return CodeType_OK
 }
 
-func (m *ResponseCheckTx) GetData() []byte {
+func (m *ResponseCheckTx) GetData() data.Bytes {
 	if m != nil {
 		return m.Data
 	}
@@ -1408,13 +1409,13 @@ func (m *ResponseCheckTx) GetFee() uint64 {
 }
 
 type ResponseQuery struct {
-	Code   CodeType `protobuf:"varint,1,opt,name=code,enum=types.CodeType" json:"code,omitempty"`
-	Index  int64    `protobuf:"varint,2,opt,name=index" json:"index,omitempty"`
-	Key    []byte   `protobuf:"bytes,3,opt,name=key,proto3" json:"key,omitempty"`
-	Value  []byte   `protobuf:"bytes,4,opt,name=value,proto3" json:"value,omitempty"`
-	Proof  []byte   `protobuf:"bytes,5,opt,name=proof,proto3" json:"proof,omitempty"`
-	Height uint64   `protobuf:"varint,6,opt,name=height" json:"height,omitempty"`
-	Log    string   `protobuf:"bytes,7,opt,name=log" json:"log,omitempty"`
+	Code   CodeType   `protobuf:"varint,1,opt,name=code,enum=types.CodeType" json:"code,omitempty"`
+	Index  int64      `protobuf:"varint,2,opt,name=index" json:"index,omitempty"`
+	Key    data.Bytes `protobuf:"bytes,3,opt,name=key,proto3" json:"key,omitempty"`
+	Value  data.Bytes `protobuf:"bytes,4,opt,name=value,proto3" json:"value,omitempty"`
+	Proof  data.Bytes `protobuf:"bytes,5,opt,name=proof,proto3" json:"proof,omitempty"`
+	Height uint64     `protobuf:"varint,6,opt,name=height" json:"height,omitempty"`
+	Log    string     `protobuf:"bytes,7,opt,name=log" json:"log,omitempty"`
 }
 
 func (m *ResponseQuery) Reset()                    { *m = ResponseQuery{} }
@@ -1436,21 +1437,21 @@ func (m *ResponseQuery) GetIndex() int64 {
 	return 0
 }
 
-func (m *ResponseQuery) GetKey() []byte {
+func (m *ResponseQuery) GetKey() data.Bytes {
 	if m != nil {
 		return m.Key
 	}
 	return nil
 }
 
-func (m *ResponseQuery) GetValue() []byte {
+func (m *ResponseQuery) GetValue() data.Bytes {
 	if m != nil {
 		return m.Value
 	}
 	return nil
 }
 
-func (m *ResponseQuery) GetProof() []byte {
+func (m *ResponseQuery) GetProof() data.Bytes {
 	if m != nil {
 		return m.Proof
 	}
@@ -1472,9 +1473,9 @@ func (m *ResponseQuery) GetLog() string {
 }
 
 type ResponseCommit struct {
-	Code CodeType `protobuf:"varint,1,opt,name=code,enum=types.CodeType" json:"code,omitempty"`
-	Data []byte   `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
-	Log  string   `protobuf:"bytes,3,opt,name=log" json:"log,omitempty"`
+	Code CodeType   `protobuf:"varint,1,opt,name=code,enum=types.CodeType" json:"code,omitempty"`
+	Data data.Bytes `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	Log  string     `protobuf:"bytes,3,opt,name=log" json:"log,omitempty"`
 }
 
 func (m *ResponseCommit) Reset()                    { *m = ResponseCommit{} }
@@ -1489,7 +1490,7 @@ func (m *ResponseCommit) GetCode() CodeType {
 	return CodeType_OK
 }
 
-func (m *ResponseCommit) GetData() []byte {
+func (m *ResponseCommit) GetData() data.Bytes {
 	if m != nil {
 		return m.Data
 	}
@@ -1536,15 +1537,15 @@ func (m *ResponseEndBlock) GetDiffs() []*Validator {
 }
 
 type Header struct {
-	ChainId        string   `protobuf:"bytes,1,opt,name=chain_id,json=chainId" json:"chain_id,omitempty"`
-	Height         uint64   `protobuf:"varint,2,opt,name=height" json:"height,omitempty"`
-	Time           uint64   `protobuf:"varint,3,opt,name=time" json:"time,omitempty"`
-	NumTxs         uint64   `protobuf:"varint,4,opt,name=num_txs,json=numTxs" json:"num_txs,omitempty"`
-	LastBlockId    *BlockID `protobuf:"bytes,5,opt,name=last_block_id,json=lastBlockId" json:"last_block_id,omitempty"`
-	LastCommitHash []byte   `protobuf:"bytes,6,opt,name=last_commit_hash,json=lastCommitHash,proto3" json:"last_commit_hash,omitempty"`
-	DataHash       []byte   `protobuf:"bytes,7,opt,name=data_hash,json=dataHash,proto3" json:"data_hash,omitempty"`
-	ValidatorsHash []byte   `protobuf:"bytes,8,opt,name=validators_hash,json=validatorsHash,proto3" json:"validators_hash,omitempty"`
-	AppHash        []byte   `protobuf:"bytes,9,opt,name=app_hash,json=appHash,proto3" json:"app_hash,omitempty"`
+	ChainId        string     `protobuf:"bytes,1,opt,name=chain_id,json=chainId" json:"chain_id,omitempty"`
+	Height         uint64     `protobuf:"varint,2,opt,name=height" json:"height,omitempty"`
+	Time           uint64     `protobuf:"varint,3,opt,name=time" json:"time,omitempty"`
+	NumTxs         uint64     `protobuf:"varint,4,opt,name=num_txs,json=numTxs" json:"num_txs,omitempty"`
+	LastBlockId    *BlockID   `protobuf:"bytes,5,opt,name=last_block_id,json=lastBlockId" json:"last_block_id,omitempty"`
+	LastCommitHash data.Bytes `protobuf:"bytes,6,opt,name=last_commit_hash,json=lastCommitHash,proto3" json:"last_commit_hash,omitempty"`
+	DataHash       data.Bytes `protobuf:"bytes,7,opt,name=data_hash,json=dataHash,proto3" json:"data_hash,omitempty"`
+	ValidatorsHash data.Bytes `protobuf:"bytes,8,opt,name=validators_hash,json=validatorsHash,proto3" json:"validators_hash,omitempty"`
+	AppHash        data.Bytes `protobuf:"bytes,9,opt,name=app_hash,json=appHash,proto3" json:"app_hash,omitempty"`
 }
 
 func (m *Header) Reset()                    { *m = Header{} }
@@ -1587,28 +1588,28 @@ func (m *Header) GetLastBlockId() *BlockID {
 	return nil
 }
 
-func (m *Header) GetLastCommitHash() []byte {
+func (m *Header) GetLastCommitHash() data.Bytes {
 	if m != nil {
 		return m.LastCommitHash
 	}
 	return nil
 }
 
-func (m *Header) GetDataHash() []byte {
+func (m *Header) GetDataHash() data.Bytes {
 	if m != nil {
 		return m.DataHash
 	}
 	return nil
 }
 
-func (m *Header) GetValidatorsHash() []byte {
+func (m *Header) GetValidatorsHash() data.Bytes {
 	if m != nil {
 		return m.ValidatorsHash
 	}
 	return nil
 }
 
-func (m *Header) GetAppHash() []byte {
+func (m *Header) GetAppHash() data.Bytes {
 	if m != nil {
 		return m.AppHash
 	}
@@ -1616,7 +1617,7 @@ func (m *Header) GetAppHash() []byte {
 }
 
 type BlockID struct {
-	Hash  []byte         `protobuf:"bytes,1,opt,name=hash,proto3" json:"hash,omitempty"`
+	Hash  data.Bytes     `protobuf:"bytes,1,opt,name=hash,proto3" json:"hash,omitempty"`
 	Parts *PartSetHeader `protobuf:"bytes,2,opt,name=parts" json:"parts,omitempty"`
 }
 
@@ -1625,7 +1626,7 @@ func (m *BlockID) String() string            { return proto.CompactTextString(m)
 func (*BlockID) ProtoMessage()               {}
 func (*BlockID) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{26} }
 
-func (m *BlockID) GetHash() []byte {
+func (m *BlockID) GetHash() data.Bytes {
 	if m != nil {
 		return m.Hash
 	}
@@ -1640,8 +1641,8 @@ func (m *BlockID) GetParts() *PartSetHeader {
 }
 
 type PartSetHeader struct {
-	Total uint64 `protobuf:"varint,1,opt,name=total" json:"total,omitempty"`
-	Hash  []byte `protobuf:"bytes,2,opt,name=hash,proto3" json:"hash,omitempty"`
+	Total uint64     `protobuf:"varint,1,opt,name=total" json:"total,omitempty"`
+	Hash  data.Bytes `protobuf:"bytes,2,opt,name=hash,proto3" json:"hash,omitempty"`
 }
 
 func (m *PartSetHeader) Reset()                    { *m = PartSetHeader{} }
@@ -1656,7 +1657,7 @@ func (m *PartSetHeader) GetTotal() uint64 {
 	return 0
 }
 
-func (m *PartSetHeader) GetHash() []byte {
+func (m *PartSetHeader) GetHash() data.Bytes {
 	if m != nil {
 		return m.Hash
 	}
@@ -1664,8 +1665,8 @@ func (m *PartSetHeader) GetHash() []byte {
 }
 
 type Validator struct {
-	PubKey []byte `protobuf:"bytes,1,opt,name=pubKey,proto3" json:"pubKey,omitempty"`
-	Power  uint64 `protobuf:"varint,2,opt,name=power" json:"power,omitempty"`
+	PubKey data.Bytes `protobuf:"bytes,1,opt,name=pubKey,proto3" json:"pubKey,omitempty"`
+	Power  uint64     `protobuf:"varint,2,opt,name=power" json:"power,omitempty"`
 }
 
 func (m *Validator) Reset()                    { *m = Validator{} }
@@ -1673,7 +1674,7 @@ func (m *Validator) String() string            { return proto.CompactTextString(
 func (*Validator) ProtoMessage()               {}
 func (*Validator) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{28} }
 
-func (m *Validator) GetPubKey() []byte {
+func (m *Validator) GetPubKey() data.Bytes {
 	if m != nil {
 		return m.PubKey
 	}
