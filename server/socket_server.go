@@ -130,15 +130,14 @@ func (s *SocketServer) waitForClose(closeConn chan error, connID int) {
 	if err == io.EOF {
 		s.Logger.Error("Connection was closed by client")
 	} else if err != nil {
-		s.Logger.Error("Connection error", "error", err)
+		s.Logger.Error("Connection error", "err", err)
 	} else {
-		// never happens
-		s.Logger.Error("Connection was closed.")
+		s.Logger.Error("Unexpected error", "err", err)
 	}
 
 	// Close the connection
 	if err := s.rmConn(connID); err != nil {
-		s.Logger.Error("Error in closing connection", "error", err)
+		s.Logger.Error("Error in closing connection", "err", err)
 	}
 }
 
