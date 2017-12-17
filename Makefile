@@ -28,8 +28,7 @@ protoc:
 	##   ldconfig (may require sudo)
 	## https://stackoverflow.com/a/25518702
 	protoc $(INCLUDE) --gogo_out=plugins=grpc:. --lint_out=. types/*.proto
-	# Since protoc can't "//nolint: gas" our packages, we need to do it manually.
-	@ bash scripts/ducttape_nolint_protoc.sh
+	sed -i "/package types/ { N; s/package types\n/\/\/nolint: gas\n&/ }" types/*.pb.go
 
 install:
 	@ go install ./cmd/...
