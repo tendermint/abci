@@ -92,7 +92,7 @@ func TestPersistentDummyInfo(t *testing.T) {
 	// make and apply block
 	height = int64(1)
 	hash := []byte("foo")
-	header := &types.Header{
+	header := types.Header{
 		Height: int64(height),
 	}
 	dummy.BeginBlock(types.RequestBeginBlock{hash, header, nil, nil})
@@ -175,7 +175,7 @@ func makeApplyBlock(t *testing.T, dummy types.Application, heightInt int, diff [
 	// make and apply block
 	height := int64(heightInt)
 	hash := []byte("foo")
-	header := &types.Header{
+	header := types.Header{
 		Height: height,
 	}
 
