@@ -46,7 +46,7 @@ message RequestInitChain {
   repeated Validator validators = 1 [(gogoproto.nullable) = false];
 }
 
-message RequestQuery{
+message RequestQuery {
   bytes data = 1;
   string path = 2;
   int64 height = 3;
@@ -68,7 +68,7 @@ message RequestDeliverTx {
   bytes tx = 1;
 }
 
-message RequestEndBlock{
+message RequestEndBlock {
   int64 height = 1;
 }
 
@@ -179,7 +179,7 @@ message BlockSize {
 }
 
 // TxSize contain limits on the tx size.
-message TxSize{
+message TxSize {
   int32 max_bytes = 1;
   int64 max_gas = 2;
 }
