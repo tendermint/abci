@@ -129,14 +129,34 @@ metalinter_all:
 ########################################
 ### Docker
 
+DEVDOC_SAVE = docker commit `docker ps -a -n 1 -q` devdoc:local
+
 docker_build:
 	docker build -t "tendermint/abci-dev" -f Dockerfile.develop .
 
 docker_run:
-	docker run -it --rm -v "$PWD:/go/src/github.com/tendermint/abci" -w "/go/src/github.com/tendermint/abci" "tendermint/abci-dev" /bin/bash
+	docker run -it -v "$(CURDIR):/go/src/github.com/tendermint/abci" -w "/go/src/github.com/tendermint/abci" "tendermint/abci-dev" /bin/bash
+
+docker_run_rm:
+	docker run -it --rm -v "$(CURDIR):/go/src/github.com/tendermint/abci" -w "/go/src/github.com/tendermint/abci" "tendermint/abci-dev" /bin/bash
+
+devdoc_init:
+	docker run -it -v "$(CURDIR):/go/src/github.com/tendermint/abci" -w "/go/src/github.com/tendermint/abci" tendermint/devdoc echo
+	# TODO make this safer
+	$(call DEVDOC_SAVE)
+
+devdoc:
+	docker run -it -v "$(CURDIR):/go/src/github.com/tendermint/abci" -w "/go/src/github.com/tendermint/abci" devdoc:local bash
+
+devdoc_save:
+	# TODO make this safer
+	$(call DEVDOC_SAVE)
+
+devdoc_clean:
+	docker rmi $$(docker images -f "dangling=true" -q)
 
 
 # To avoid unintended conflicts with file names, always add to .PHONY
 # unless there is a reason not to.
 # https://www.gnu.org/software/make/manual/html_node/Phony-Targets.html
-.PHONY: check protoc build dist install check_tools get_tools get_protoc update_tools get_vendor_deps test test_race test_integrations fmt metalinter metalinter_all docker_build docker_run
+.PHONY: check protoc build dist install check_tools get_tools get_protoc update_tools get_vendor_deps test test_race test_integrations fmt metalinter metalinter_all docker_build docker_run docker_run_rm devdoc_init devdoc devdoc_save devdoc_clean
