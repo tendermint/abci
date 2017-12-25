@@ -201,3 +201,4 @@ Here, we describe the requests and responses as function arguments and return va
   * __Usage__:<br/>
     Return a Merkle root hash of the application state.
 
+# devdoc
