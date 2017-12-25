@@ -8,7 +8,7 @@ GOTOOLS_CHECK = gox glide gometalinter.v2 protoc protoc-gen-gogo
 PACKAGES=$(shell go list ./... | grep -v '/vendor/')
 INCLUDE = -I=. -I=${GOPATH}/src -I=${GOPATH}/src/github.com/gogo/protobuf/protobuf
 
-all: check build test install metalinter
+all: check protoc build test install metalinter
 
 check: check_tools get_vendor_deps
 
@@ -25,7 +25,7 @@ protoc:
 	@awk '/package types/ { print "//nolint: gas"; print; next }1' types/types.pb.go > types/types.pb.go.new
 	@mv types/types.pb.go.new types/types.pb.go
 
-build: protoc
+build:
 	@go build -i ./cmd/...
 
 dist:
