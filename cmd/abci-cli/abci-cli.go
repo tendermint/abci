@@ -3,10 +3,12 @@ package main
 import (
 	"bufio"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -111,26 +113,36 @@ func Execute() error {
 }
 
 func addGlobalFlags() {
-	RootCmd.PersistentFlags().StringVarP(&flagAddress, "address", "", "tcp://0.0.0.0:46658", "address of application socket")
+	RootCmd.PersistentFlags().StringVarP(&flagAddress, "address", "", "tcp://0.0.0.0:46658",
+		"address of application socket")
 	RootCmd.PersistentFlags().StringVarP(&flagAbci, "abci", "", "socket", "either socket or grpc")
-	RootCmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false, "print the command and results as if it were a console session")
-	RootCmd.PersistentFlags().StringVarP(&flagLogLevel, "log_level", "", "debug", "set the logger level")
+	RootCmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false,
+		"print the command and results as if it were a console session")
+	RootCmd.PersistentFlags().StringVarP(&flagLogLevel, "log_level", "", "debug",
+		"set the logger level")
 }
 
 func addQueryFlags() {
-	queryCmd.PersistentFlags().StringVarP(&flagPath, "path", "", "/store", "path to prefix query with")
-	queryCmd.PersistentFlags().IntVarP(&flagHeight, "height", "", 0, "height to query the blockchain at")
-	queryCmd.PersistentFlags().BoolVarP(&flagProve, "prove", "", false, "whether or not to return a merkle proof of the query result")
+	queryCmd.PersistentFlags().StringVarP(&flagPath, "path", "", "/store",
+		"path to prefix query with")
+	queryCmd.PersistentFlags().IntVarP(&flagHeight, "height", "", 0,
+		"height to query the blockchain at")
+	queryCmd.PersistentFlags().BoolVarP(&flagProve, "prove", "", false,
+		"whether or not to return a merkle proof of the query result")
 }
 
 func addCounterFlags() {
-	counterCmd.PersistentFlags().StringVarP(&flagAddrC, "addr", "", "tcp://0.0.0.0:46658", "listen address")
-	counterCmd.PersistentFlags().BoolVarP(&flagSerial, "serial", "", false, "enforce incrementing (serial) transactions")
+	counterCmd.PersistentFlags().StringVarP(&flagAddrC, "addr", "", "tcp://0.0.0.0:46658",
+		"listen address")
+	counterCmd.PersistentFlags().BoolVarP(&flagSerial, "serial", "", false,
+		"enforce incrementing (serial) transactions")
 }
 
 func addDummyFlags() {
-	dummyCmd.PersistentFlags().StringVarP(&flagAddrD, "addr", "", "tcp://0.0.0.0:46658", "listen address")
-	dummyCmd.PersistentFlags().StringVarP(&flagPersist, "persist", "", "", "directory to use for a database")
+	dummyCmd.PersistentFlags().StringVarP(&flagAddrD, "addr", "", "tcp://0.0.0.0:46658",
+		"listen address")
+	dummyCmd.PersistentFlags().StringVarP(&flagPersist, "persist", "", "",
+		"directory to use for a database")
 }
 func addCommands() {
 	RootCmd.AddCommand(batchCmd)
@@ -145,6 +157,8 @@ func addCommands() {
 	RootCmd.AddCommand(testCmd)
 	addQueryFlags()
 	RootCmd.AddCommand(queryCmd)
+	RootCmd.AddCommand(beginBlockCmd)
+	RootCmd.AddCommand(endBlockCmd)
 
 	// examples
 	addCounterFlags()
@@ -184,7 +198,7 @@ var consoleCmd = &cobra.Command{
 	Use:   "console",
 	Short: "start an interactive ABCI console for multiple commands",
 	Long: `start an interactive ABCI console for multiple commands
-	
+
 This command opens an interactive console for running any of the other commands
 without opening a new connection each time
 `,
@@ -304,6 +318,26 @@ var testCmd = &cobra.Command{
 	},
 }
 
+var beginBlockCmd = &cobra.Command{
+	Use:   "begin_block",
+	Short: "delineate beginning of a block with a header and a hash",
+	Long:  "delineate beginning of a block with a header and a hash",
+	Args:  cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return cmdBeginBlock(cmd, args)
+	},
+}
+
+var endBlockCmd = &cobra.Command{
+	Use:   "end_block",
+	Short: "delineate ending of a block with a height and receive info about validator set changes",
+	Long:  "delineate ending of a bock with a height and receive info about validator set changes",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return cmdEndBlock(cmd, args)
+	},
+}
+
 // Generates new Args array based off of previous call args to maintain flag persistence
 func persistentArgs(line []byte) []string {
 
@@ -395,7 +429,6 @@ func cmdConsole(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
-	return nil
 }
 
 func muxOnCommands(cmd *cobra.Command, pArgs []string) error {
@@ -421,7 +454,7 @@ func muxOnCommands(cmd *cobra.Command, pArgs []string) error {
 			}
 
 			// otherwise, we need to skip the next one too
-			i += 1
+			i++
 			continue
 		}
 
@@ -594,6 +627,58 @@ func cmdCommit(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// Delineate beginning of block with header and hash
+func cmdBeginBlock(cmd *cobra.Command, args []string) error {
+	if len(args) != 2 {
+		return errors.New("Command begin block takes 2 arguments: header and hash")
+	}
+
+	headerBytes, err := stringOrHexToBytes(args[0])
+	if err != nil {
+		return err
+	}
+
+	hashBytes, err := stringOrHexToBytes(args[1])
+	if err != nil {
+		return err
+	}
+
+	header := new(types.Header)
+	if err := json.Unmarshal(headerBytes, header); err != nil {
+		return err
+	}
+
+	_, err = client.BeginBlockSync(types.RequestBeginBlock{hashBytes, header, nil, nil})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Delineate end of block with height and receive info about changes to validator set
+func cmdEndBlock(cmd *cobra.Command, args []string) error {
+	if len(args) != 1 {
+		return errors.New("Command begin block takes 1 argument: height")
+	}
+
+	height, err := strconv.Atoi(args[0])
+	if err != nil {
+		return err
+	}
+	height64 := int64(height)
+
+	_, err = client.EndBlockSync(types.RequestEndBlock{height64})
+	if err != nil {
+		return err
+	}
+	// TODO: Print the updates to the validator set.
+	/*printResponse(cmd, args, response{
+		Code: types.
+	})
+	*/
+	return nil
+}
+
 // Query application state
 func cmdQuery(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
@@ -726,6 +811,7 @@ func printResponse(cmd *cobra.Command, args []string, rsp response) {
 			fmt.Printf("-> proof: %X\n", rsp.Query.Proof)
 		}
 	}
+
 }
 
 // NOTE: s is interpreted as a string unless prefixed with 0x
