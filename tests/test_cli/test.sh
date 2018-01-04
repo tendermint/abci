@@ -1,35 +1,42 @@
 #! /bin/bash
+set -e
 
-cd $GOPATH/src/github.com/tendermint/abci
+# Get the root directory.
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ] ; do SOURCE="$(readlink "$SOURCE")"; done
+DIR="$( cd -P "$( dirname "$SOURCE" )/../.." && pwd )"
+
+# Change into that dir because we expect that.
+cd "$DIR" || exit
 
 function testExample() {
-	N=$1
-	INPUT=$2
-	APP=$3
+    N=$1
+    INPUT=$2
+    APP="$3 $4"
 
-	echo "Example $N"
-	$APP &> /dev/null &
-	sleep 2
-	abci-cli --verbose batch < $INPUT > "${INPUT}.out.new"
-	killall "$APP" 
+    echo "Example $N: $APP"
+    $APP &> /dev/null &
+    sleep 2
+    abci-cli --log_level=error --verbose batch < "$INPUT" > "${INPUT}.out.new"
+    killall "$3"
 
-	pre=`shasum < "${INPUT}.out"`
-	post=`shasum < "${INPUT}.out.new"`
+    pre=$(sha256sum < "${INPUT}.out")
+    post=$(sha256sum < "${INPUT}.out.new")
 
-	if [[ "$pre" != "$post" ]]; then
-		echo "You broke the tutorial"
-		echo "Got:" 
-		cat "${INPUT}.out.new"
-		echo "Expected:" 
-		cat "${INPUT}.out"
-		exit 1
-	fi
+    if [[ "$pre" != "$post" ]]; then
+        echo "You broke the tutorial"
+        echo "Got:"
+        cat "${INPUT}.out.new"
+        echo "Expected:"
+        cat "${INPUT}.out"
+        exit 1
+    fi
 
-	rm "${INPUT}".out.new
+    rm "${INPUT}".out.new
 }
 
-testExample 1 tests/test_cli/ex1.abci dummy
-testExample 2 tests/test_cli/ex2.abci counter
+testExample 1 tests/test_cli/ex1.abci abci-cli dummy
+testExample 2 tests/test_cli/ex2.abci abci-cli counter
 
 echo ""
 echo "PASS"

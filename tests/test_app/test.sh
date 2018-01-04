@@ -3,14 +3,24 @@ set -e
 
 # These tests spawn the counter app and server by execing the ABCI_APP command and run some simple client tests against it
 
-ROOT=$GOPATH/src/github.com/tendermint/abci/tests/test_app
-cd $ROOT
+# Get the directory of where this script is.
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ] ; do SOURCE="$(readlink "$SOURCE")"; done
+DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 
+# Change into that dir because we expect that.
+cd "$DIR"
+
+echo "RUN COUNTER OVER SOCKET"
 # test golang counter
-ABCI_APP="counter" go run  *.go
+ABCI_APP="counter" go run  ./*.go
+echo "----------------------"
 
+
+echo "RUN COUNTER OVER GRPC"
 # test golang counter via grpc
-ABCI_APP="counter -abci=grpc" ABCI="grpc" go run *.go
+ABCI_APP="counter --abci=grpc" ABCI="grpc" go run ./*.go
+echo "----------------------"
 
 # test nodejs counter
 # TODO: fix node app

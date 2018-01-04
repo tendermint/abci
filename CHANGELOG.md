@@ -1,10 +1,110 @@
 # Changelog
 
+## 0.9.0 (December 28, 2017)
+
+BREAKING CHANGES:
+ - [types] Id -> ID
+ - [types] ResponseEndBlock: renamed Diffs field to ValidatorUpdates
+ - [types] changed protobuf field indices for Request and Response oneof types
+
+FEATURES:
+ - [types] ResponseEndBlock: added ConsensusParamUpdates
+
+BUG FIXES:
+ - [cmd] fix console and batch commands to use a single persistent connection
+
+## 0.8.0 (December 6, 2017)
+
+BREAKING CHANGES:
+ - [client] all XxxSync methods now return (ResponseXxx, error)
+ - [types] all methods on Application interface now take RequestXxx and return (ResponseXxx, error).
+    - Except `CheckTx`/`DeliverTx`, which takes a `tx []byte` argument.
+    - Except `Commit`, which takes no arguments.
+ - [types] removed Result and ResultQuery
+ - [types] removed CodeType - only `0 == OK` is defined here, everything else is left to convention at the application level
+ - [types] switched to using `gogo/protobuf` for code generation
+ - [types] use `customtype` feature of `gogo/protobuf` to replace `[]byte` with `data.Bytes` in all generated types :)
+    - this eliminates the need for additional types like ResultQuery
+ - [types] `pubKey` -> `pub_key`
+ - [types] `uint64` -> `int32` for `Header.num_txs` and `PartSetHeader.total`
+ - [types] `uint64` -> `int64` for everything else
+ - [types] ResponseSetOption includes error code
+ - [abci-cli] codes are printed as their number instead of a message, except for `code == 0`, which is still printed as `OK`
+
+FEATURES:
+ - [types] ResponseDeliverTx: added `tags` field
+ - [types] ResponseCheckTx: added `gas` and `fee` fields
+ - [types] RequestBeginBlock: added `absent_validators` and `byzantine_validators` fields
+ - [dummy] DeliverTx returns an owner tag and a key tag
+ - [abci-cli] added `log_level` flag to control the logger
+ - [abci-cli] introduce `abci-cli test` command for simple testing of ABCI server implementations via Counter application
+
+## 0.7.1 (November 14, 2017)
+
+IMPROVEMENTS:
+ - [cli] added version command
+
+BUG FIXES:
+ - [server] fix "Connection error module=abci-server error=EOF"
+
+## 0.7.0 (October 27, 2017)
+
+BREAKING CHANGES:
+ - [cli] consolidate example apps under a single `abci-cli` binary
+
+IMPROVEMENTS:
+ - [cli] use spf13/cobra instead of urfave/cli
+ - [dummy] use iavl instead of merkleeyes, and add support for historical queries
+
+BUG FIXES:
+ - [client] fix deadlock on StopForError
+
+## 0.6.0 (September 22, 2017)
+
+BREAKING CHANGES:
+
+- [types/client] app.BeginBlock takes RequestBeginBlock
+- [types/client] app.InitChain takes RequestInitChain
+- [types/client] app.Info takes RequestInfo
+
+IMPROVEMENTS:
+
+- various linting
+
+## 0.5.0 (May 18, 2017)
+
+BREAKING CHANGES:
+
+- `NewSocketClient` and `NewGRPCClient` no longer start the client automatically, and don't return errors. The caller is responsible for running `client.Start()` and checking the error.
+- `NewSocketServer` and `NewGRPCServer` no longer start the server automatically, and don't return errors. The caller is responsible for running `server.Start()` and checking the error.
+
+
+FEATURES:
+
+- [types] new method `func (res Result) IsSameCode(compare Result) bool` checks whether two results have the same code
+- [types] new methods `func (r *ResponseCheckTx) Result() Result` and `func (r *ResponseDeliverTx) Result() Result` to convert from protobuf types (for control over json serialization)
+- [types] new method `func (r *ResponseQuery) Result() *ResultQuery` and struct `ResultQuery` to convert from protobuf types (for control over json serializtion)
+
+IMPROVEMENTS:
+
+- Update imports for new `tmlibs` repository
+- Use the new logger
+- [abci-cli] Add flags to the query command for `path`, `height`, and `prove`
+- [types] use `data.Bytes` and `json` tags in the `Result` struct
+
+BUG FIXES:
+
+## 0.4.1 (April 18, 2017)
+
+IMPROVEMENTS:
+
+- Update dependencies
+
 ## 0.4.0 (March 6, 2017)
 
-BREAKING CHANGES: 
+BREAKING CHANGES:
 
-- Query takes RequestQuery and returns ResponseQuery. The request is split into `data` and `path`, 
+- Query takes RequestQuery and returns ResponseQuery. The request is split into `data` and `path`,
 can specify a height to query the state from, and whether or not the response should come with a proof.
 The response returns the corresponding key-value pair, with proof if requested.
 
@@ -13,7 +113,7 @@ message RequestQuery{
 	bytes data = 1;
 	string path = 2;
 	uint64 height = 3;
-	bool prove = 4; 
+	bool prove = 4;
 }
 
 message ResponseQuery{
@@ -89,7 +189,7 @@ message Header {
 	bytes last_commit_hash = 6;
 	bytes data_hash = 7;
 	bytes validators_hash = 8;
-	bytes app_hash = 9; 
+	bytes app_hash = 9;
 }
 
 message BlockID {

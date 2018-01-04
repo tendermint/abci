@@ -3,14 +3,17 @@ package dummy
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"strconv"
 	"strings"
 
+	"github.com/tendermint/abci/example/code"
 	"github.com/tendermint/abci/types"
-	cmn "github.com/tendermint/go-common"
-	dbm "github.com/tendermint/go-db"
-	"github.com/tendermint/go-merkle"
-	"github.com/tendermint/go-wire"
+	crypto "github.com/tendermint/go-crypto"
+	"github.com/tendermint/iavl"
+	cmn "github.com/tendermint/tmlibs/common"
+	dbm "github.com/tendermint/tmlibs/db"
+	"github.com/tendermint/tmlibs/log"
 )
 
 const (
@@ -19,52 +22,56 @@ const (
 
 //-----------------------------------------
 
+var _ types.Application = (*PersistentDummyApplication)(nil)
+
 type PersistentDummyApplication struct {
 	app *DummyApplication
-	db  dbm.DB
-
-	// latest received
-	// TODO: move to merkle tree?
-	blockHeader *types.Header
 
 	// validator set
-	changes []*types.Validator
+	ValUpdates []*types.Validator
+
+	logger log.Logger
 }
 
 func NewPersistentDummyApplication(dbDir string) *PersistentDummyApplication {
-	db := dbm.NewDB("dummy", "leveldb", dbDir)
-	lastBlock := LoadLastBlock(db)
+	name := "dummy"
+	db, err := dbm.NewGoLevelDB(name, dbDir)
+	if err != nil {
+		panic(err)
+	}
 
-	stateTree := merkle.NewIAVLTree(0, db)
-	stateTree.Load(lastBlock.AppHash)
-
-	log.Notice("Loaded state", "block", lastBlock.Height, "root", stateTree.Hash())
+	stateTree := iavl.NewVersionedTree(500, db)
+	stateTree.Load()
 
 	return &PersistentDummyApplication{
-		app: &DummyApplication{state: stateTree},
-		db:  db,
+		app:    &DummyApplication{state: stateTree},
+		logger: log.NewNopLogger(),
 	}
 }
 
-func (app *PersistentDummyApplication) Info() (resInfo types.ResponseInfo) {
-	resInfo = app.app.Info()
-	lastBlock := LoadLastBlock(app.db)
-	resInfo.LastBlockHeight = lastBlock.Height
-	resInfo.LastBlockAppHash = lastBlock.AppHash
-	return resInfo
+func (app *PersistentDummyApplication) SetLogger(l log.Logger) {
+	app.logger = l
 }
 
-func (app *PersistentDummyApplication) SetOption(key string, value string) (log string) {
-	return app.app.SetOption(key, value)
+func (app *PersistentDummyApplication) Info(req types.RequestInfo) types.ResponseInfo {
+	res := app.app.Info(req)
+	var latestVersion uint64 = app.app.state.LatestVersion() // TODO: change to int64
+	res.LastBlockHeight = int64(latestVersion)
+	res.LastBlockAppHash = app.app.state.Hash()
+	return res
 }
 
-// tx is either "key=value" or just arbitrary bytes
-func (app *PersistentDummyApplication) DeliverTx(tx []byte) types.Result {
+func (app *PersistentDummyApplication) SetOption(req types.RequestSetOption) types.ResponseSetOption {
+	return app.app.SetOption(req)
+}
+
+// tx is either "val:pubkey/power" or "key=value" or just arbitrary bytes
+func (app *PersistentDummyApplication) DeliverTx(tx []byte) types.ResponseDeliverTx {
 	// if it starts with "val:", update the validator set
 	// format is "val:pubkey/power"
 	if isValidatorTx(tx) {
 		// update validators in the merkle tree
-		// and in app.changes
+		// and in app.ValUpdates
 		return app.execValidatorTx(tx)
 	}
 
@@ -72,21 +79,26 @@ func (app *PersistentDummyApplication) DeliverTx(tx []byte) types.Result {
 	return app.app.DeliverTx(tx)
 }
 
-func (app *PersistentDummyApplication) CheckTx(tx []byte) types.Result {
+func (app *PersistentDummyApplication) CheckTx(tx []byte) types.ResponseCheckTx {
 	return app.app.CheckTx(tx)
 }
 
-func (app *PersistentDummyApplication) Commit() types.Result {
-	// Save
-	appHash := app.app.state.Save()
-	log.Info("Saved state", "root", appHash)
+// Commit will panic if InitChain was not called
+func (app *PersistentDummyApplication) Commit() types.ResponseCommit {
 
-	lastBlock := LastBlockInfo{
-		Height:  app.blockHeader.Height,
-		AppHash: appHash, // this hash will be in the next block header
+	// Save a new version for next height
+	height := app.app.state.LatestVersion() + 1
+	var appHash []byte
+	var err error
+
+	appHash, err = app.app.state.SaveVersion(height)
+	if err != nil {
+		// if this wasn't a dummy app, we'd do something smarter
+		panic(err)
 	}
-	SaveLastBlock(app.db, lastBlock)
-	return types.NewResultOK(appHash, "")
+
+	app.logger.Info("Commit block", "height", height, "root", appHash)
+	return types.ResponseCommit{Code: code.CodeTypeOK, Data: appHash}
 }
 
 func (app *PersistentDummyApplication) Query(reqQuery types.RequestQuery) types.ResponseQuery {
@@ -94,64 +106,26 @@ func (app *PersistentDummyApplication) Query(reqQuery types.RequestQuery) types.
 }
 
 // Save the validators in the merkle tree
-func (app *PersistentDummyApplication) InitChain(validators []*types.Validator) {
-	for _, v := range validators {
+func (app *PersistentDummyApplication) InitChain(req types.RequestInitChain) types.ResponseInitChain {
+	for _, v := range req.Validators {
 		r := app.updateValidator(v)
 		if r.IsErr() {
-			log.Error("Error updating validators", "r", r)
+			app.logger.Error("Error updating validators", "r", r)
 		}
 	}
+	return types.ResponseInitChain{}
 }
 
 // Track the block hash and header information
-func (app *PersistentDummyApplication) BeginBlock(hash []byte, header *types.Header) {
-	// update latest block info
-	app.blockHeader = header
-
+func (app *PersistentDummyApplication) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginBlock {
 	// reset valset changes
-	app.changes = make([]*types.Validator, 0)
+	app.ValUpdates = make([]*types.Validator, 0)
+	return types.ResponseBeginBlock{}
 }
 
 // Update the validator set
-func (app *PersistentDummyApplication) EndBlock(height uint64) (resEndBlock types.ResponseEndBlock) {
-	return types.ResponseEndBlock{Diffs: app.changes}
-}
-
-//-----------------------------------------
-// persist the last block info
-
-var lastBlockKey = []byte("lastblock")
-
-type LastBlockInfo struct {
-	Height  uint64
-	AppHash []byte
-}
-
-// Get the last block from the db
-func LoadLastBlock(db dbm.DB) (lastBlock LastBlockInfo) {
-	buf := db.Get(lastBlockKey)
-	if len(buf) != 0 {
-		r, n, err := bytes.NewReader(buf), new(int), new(error)
-		wire.ReadBinaryPtr(&lastBlock, r, 0, n, err)
-		if *err != nil {
-			// DATA HAS BEEN CORRUPTED OR THE SPEC HAS CHANGED
-			log.Crit(cmn.Fmt("Data has been corrupted or its spec has changed: %v\n", *err))
-		}
-		// TODO: ensure that buf is completely read.
-	}
-
-	return lastBlock
-}
-
-func SaveLastBlock(db dbm.DB, lastBlock LastBlockInfo) {
-	log.Notice("Saving block", "height", lastBlock.Height, "root", lastBlock.AppHash)
-	buf, n, err := new(bytes.Buffer), new(int), new(error)
-	wire.WriteBinary(lastBlock, buf, n, err)
-	if *err != nil {
-		// TODO
-		cmn.PanicCrisis(*err)
-	}
-	db.Set(lastBlockKey, buf.Bytes())
+func (app *PersistentDummyApplication) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
+	return types.ResponseEndBlock{ValidatorUpdates: app.ValUpdates}
 }
 
 //---------------------------------------------
@@ -172,58 +146,77 @@ func (app *PersistentDummyApplication) Validators() (validators []*types.Validat
 	return
 }
 
-func MakeValSetChangeTx(pubkey []byte, power uint64) []byte {
+func MakeValSetChangeTx(pubkey []byte, power int64) []byte {
 	return []byte(cmn.Fmt("val:%X/%d", pubkey, power))
 }
 
 func isValidatorTx(tx []byte) bool {
-	if strings.HasPrefix(string(tx), ValidatorSetChangePrefix) {
-		return true
-	}
-	return false
+	return strings.HasPrefix(string(tx), ValidatorSetChangePrefix)
 }
 
 // format is "val:pubkey1/power1,addr2/power2,addr3/power3"tx
-func (app *PersistentDummyApplication) execValidatorTx(tx []byte) types.Result {
+func (app *PersistentDummyApplication) execValidatorTx(tx []byte) types.ResponseDeliverTx {
 	tx = tx[len(ValidatorSetChangePrefix):]
+
+	//get the pubkey and power
 	pubKeyAndPower := strings.Split(string(tx), "/")
 	if len(pubKeyAndPower) != 2 {
-		return types.ErrEncodingError.SetLog(cmn.Fmt("Expected 'pubkey/power'. Got %v", pubKeyAndPower))
+		return types.ResponseDeliverTx{
+			Code: code.CodeTypeEncodingError,
+			Log:  fmt.Sprintf("Expected 'pubkey/power'. Got %v", pubKeyAndPower)}
 	}
 	pubkeyS, powerS := pubKeyAndPower[0], pubKeyAndPower[1]
+
+	// decode the pubkey, ensuring its go-crypto encoded
 	pubkey, err := hex.DecodeString(pubkeyS)
 	if err != nil {
-		return types.ErrEncodingError.SetLog(cmn.Fmt("Pubkey (%s) is invalid hex", pubkeyS))
+		return types.ResponseDeliverTx{
+			Code: code.CodeTypeEncodingError,
+			Log:  fmt.Sprintf("Pubkey (%s) is invalid hex", pubkeyS)}
 	}
-	power, err := strconv.Atoi(powerS)
+	_, err = crypto.PubKeyFromBytes(pubkey)
 	if err != nil {
-		return types.ErrEncodingError.SetLog(cmn.Fmt("Power (%s) is not an int", powerS))
+		return types.ResponseDeliverTx{
+			Code: code.CodeTypeEncodingError,
+			Log:  fmt.Sprintf("Pubkey (%X) is invalid go-crypto encoded", pubkey)}
+	}
+
+	// decode the power
+	power, err := strconv.ParseInt(powerS, 10, 64)
+	if err != nil {
+		return types.ResponseDeliverTx{
+			Code: code.CodeTypeEncodingError,
+			Log:  fmt.Sprintf("Power (%s) is not an int", powerS)}
 	}
 
 	// update
-	return app.updateValidator(&types.Validator{pubkey, uint64(power)})
+	return app.updateValidator(&types.Validator{pubkey, power})
 }
 
 // add, update, or remove a validator
-func (app *PersistentDummyApplication) updateValidator(v *types.Validator) types.Result {
+func (app *PersistentDummyApplication) updateValidator(v *types.Validator) types.ResponseDeliverTx {
 	key := []byte("val:" + string(v.PubKey))
 	if v.Power == 0 {
 		// remove validator
 		if !app.app.state.Has(key) {
-			return types.ErrUnauthorized.SetLog(cmn.Fmt("Cannot remove non-existent validator %X", key))
+			return types.ResponseDeliverTx{
+				Code: code.CodeTypeUnauthorized,
+				Log:  fmt.Sprintf("Cannot remove non-existent validator %X", key)}
 		}
 		app.app.state.Remove(key)
 	} else {
 		// add or update validator
 		value := bytes.NewBuffer(make([]byte, 0))
 		if err := types.WriteMessage(v, value); err != nil {
-			return types.ErrInternalError.SetLog(cmn.Fmt("Error encoding validator: %v", err))
+			return types.ResponseDeliverTx{
+				Code: code.CodeTypeEncodingError,
+				Log:  fmt.Sprintf("Error encoding validator: %v", err)}
 		}
 		app.app.state.Set(key, value.Bytes())
 	}
 
-	// we only update the changes array if we succesfully updated the tree
-	app.changes = append(app.changes, v)
+	// we only update the changes array if we successfully updated the tree
+	app.ValUpdates = append(app.ValUpdates, v)
 
-	return types.OK
+	return types.ResponseDeliverTx{Code: code.CodeTypeOK}
 }

@@ -2,7 +2,6 @@ package example
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"reflect"
 	"testing"
@@ -12,11 +11,14 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/tendermint/abci/client"
+	cmn "github.com/tendermint/tmlibs/common"
+	"github.com/tendermint/tmlibs/log"
+
+	abcicli "github.com/tendermint/abci/client"
+	"github.com/tendermint/abci/example/code"
 	"github.com/tendermint/abci/example/dummy"
-	"github.com/tendermint/abci/server"
+	abciserver "github.com/tendermint/abci/server"
 	"github.com/tendermint/abci/types"
-	cmn "github.com/tendermint/go-common"
 )
 
 func TestDummy(t *testing.T) {
@@ -35,22 +37,22 @@ func TestGRPC(t *testing.T) {
 }
 
 func testStream(t *testing.T, app types.Application) {
-
 	numDeliverTxs := 200000
 
 	// Start the listener
-	server, err := server.NewSocketServer("unix://test.sock", app)
-	if err != nil {
-		log.Fatal(cmn.Fmt("Error starting socket server: %v", err.Error()))
+	server := abciserver.NewSocketServer("unix://test.sock", app)
+	server.SetLogger(log.TestingLogger().With("module", "abci-server"))
+	if err := server.Start(); err != nil {
+		t.Fatalf("Error starting socket server: %v", err.Error())
 	}
 	defer server.Stop()
 
 	// Connect to the socket
-	client, err := abcicli.NewSocketClient("unix://test.sock", false)
-	if err != nil {
-		log.Fatal(cmn.Fmt("Error starting socket client: %v", err.Error()))
+	client := abcicli.NewSocketClient("unix://test.sock", false)
+	client.SetLogger(log.TestingLogger().With("module", "abci-client"))
+	if err := client.Start(); err != nil {
+		t.Fatalf("Error starting socket client: %v", err.Error())
 	}
-	client.Start()
 	defer client.Stop()
 
 	done := make(chan struct{})
@@ -60,7 +62,7 @@ func testStream(t *testing.T, app types.Application) {
 		switch r := res.Value.(type) {
 		case *types.Response_DeliverTx:
 			counter++
-			if r.DeliverTx.Code != types.CodeType_OK {
+			if r.DeliverTx.Code != code.CodeTypeOK {
 				t.Error("DeliverTx failed with ret_code", r.DeliverTx.Code)
 			}
 			if counter > numDeliverTxs {
@@ -108,20 +110,20 @@ func dialerFunc(addr string, timeout time.Duration) (net.Conn, error) {
 }
 
 func testGRPCSync(t *testing.T, app *types.GRPCApplication) {
-
 	numDeliverTxs := 2000
 
 	// Start the listener
-	server, err := server.NewGRPCServer("unix://test.sock", app)
-	if err != nil {
-		log.Fatal(cmn.Fmt("Error starting GRPC server: %v", err.Error()))
+	server := abciserver.NewGRPCServer("unix://test.sock", app)
+	server.SetLogger(log.TestingLogger().With("module", "abci-server"))
+	if err := server.Start(); err != nil {
+		t.Fatalf("Error starting GRPC server: %v", err.Error())
 	}
 	defer server.Stop()
 
 	// Connect to the socket
 	conn, err := grpc.Dial("unix://test.sock", grpc.WithInsecure(), grpc.WithDialer(dialerFunc))
 	if err != nil {
-		log.Fatal(cmn.Fmt("Error dialing GRPC server: %v", err.Error()))
+		t.Fatalf("Error dialing GRPC server: %v", err.Error())
 	}
 	defer conn.Close()
 
@@ -135,7 +137,7 @@ func testGRPCSync(t *testing.T, app *types.GRPCApplication) {
 			t.Fatalf("Error in GRPC DeliverTx: %v", err.Error())
 		}
 		counter++
-		if response.Code != types.CodeType_OK {
+		if response.Code != code.CodeTypeOK {
 			t.Error("DeliverTx failed with ret_code", response.Code)
 		}
 		if counter > numDeliverTxs {

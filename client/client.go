@@ -5,9 +5,19 @@ import (
 	"sync"
 
 	"github.com/tendermint/abci/types"
-	cmn "github.com/tendermint/go-common"
+	cmn "github.com/tendermint/tmlibs/common"
 )
 
+const (
+	dialRetryIntervalSeconds = 3
+	echoRetryIntervalSeconds = 1
+)
+
+// Client defines an interface for an ABCI client.
+// All `Async` methods return a `ReqRes` object.
+// All `Sync` methods return the appropriate protobuf ResponseXxx struct and an error.
+// Note these are client errors, eg. ABCI socket connectivity issues.
+// Application-related errors are reflected in response via ABCI error codes and logs.
 type Client interface {
 	cmn.Service
 
@@ -16,42 +26,41 @@ type Client interface {
 
 	FlushAsync() *ReqRes
 	EchoAsync(msg string) *ReqRes
-	InfoAsync() *ReqRes
-	SetOptionAsync(key string, value string) *ReqRes
+	InfoAsync(types.RequestInfo) *ReqRes
+	SetOptionAsync(types.RequestSetOption) *ReqRes
 	DeliverTxAsync(tx []byte) *ReqRes
 	CheckTxAsync(tx []byte) *ReqRes
-	QueryAsync(reqQuery types.RequestQuery) *ReqRes
+	QueryAsync(types.RequestQuery) *ReqRes
 	CommitAsync() *ReqRes
+	InitChainAsync(types.RequestInitChain) *ReqRes
+	BeginBlockAsync(types.RequestBeginBlock) *ReqRes
+	EndBlockAsync(types.RequestEndBlock) *ReqRes
 
 	FlushSync() error
-	EchoSync(msg string) (res types.Result)
-	InfoSync() (resInfo types.ResponseInfo, err error)
-	SetOptionSync(key string, value string) (res types.Result)
-	DeliverTxSync(tx []byte) (res types.Result)
-	CheckTxSync(tx []byte) (res types.Result)
-	QuerySync(reqQuery types.RequestQuery) (resQuery types.ResponseQuery, err error)
-	CommitSync() (res types.Result)
-
-	InitChainAsync(validators []*types.Validator) *ReqRes
-	BeginBlockAsync(hash []byte, header *types.Header) *ReqRes
-	EndBlockAsync(height uint64) *ReqRes
-
-	InitChainSync(validators []*types.Validator) (err error)
-	BeginBlockSync(hash []byte, header *types.Header) (err error)
-	EndBlockSync(height uint64) (resEndBlock types.ResponseEndBlock, err error)
+	EchoSync(msg string) (*types.ResponseEcho, error)
+	InfoSync(types.RequestInfo) (*types.ResponseInfo, error)
+	SetOptionSync(types.RequestSetOption) (*types.ResponseSetOption, error)
+	DeliverTxSync(tx []byte) (*types.ResponseDeliverTx, error)
+	CheckTxSync(tx []byte) (*types.ResponseCheckTx, error)
+	QuerySync(types.RequestQuery) (*types.ResponseQuery, error)
+	CommitSync() (*types.ResponseCommit, error)
+	InitChainSync(types.RequestInitChain) (*types.ResponseInitChain, error)
+	BeginBlockSync(types.RequestBeginBlock) (*types.ResponseBeginBlock, error)
+	EndBlockSync(types.RequestEndBlock) (*types.ResponseEndBlock, error)
 }
 
 //----------------------------------------
 
+// NewClient returns a new ABCI client of the specified transport type.
+// It returns an error if the transport is not "socket" or "grpc"
 func NewClient(addr, transport string, mustConnect bool) (client Client, err error) {
 	switch transport {
 	case "socket":
-		client, err = NewSocketClient(addr, mustConnect)
+		client = NewSocketClient(addr, mustConnect)
 	case "grpc":
-		client, err = NewGRPCClient(addr, mustConnect)
+		client = NewGRPCClient(addr, mustConnect)
 	default:
 		err = fmt.Errorf("Unknown abci transport %s", transport)
-
 	}
 	return
 }

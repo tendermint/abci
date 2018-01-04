@@ -7,12 +7,15 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/tendermint/iavl"
+	cmn "github.com/tendermint/tmlibs/common"
+	"github.com/tendermint/tmlibs/log"
+
 	abcicli "github.com/tendermint/abci/client"
-	"github.com/tendermint/abci/server"
+	"github.com/tendermint/abci/example/code"
+	abciserver "github.com/tendermint/abci/server"
 	"github.com/tendermint/abci/types"
-	cmn "github.com/tendermint/go-common"
-	"github.com/tendermint/go-crypto"
-	"github.com/tendermint/go-merkle"
 )
 
 func testDummy(t *testing.T, app types.Application, tx []byte, key, value string) {
@@ -27,7 +30,7 @@ func testDummy(t *testing.T, app types.Application, tx []byte, key, value string
 		Path: "/store",
 		Data: []byte(key),
 	})
-	require.Equal(t, types.CodeType_OK, resQuery.Code)
+	require.Equal(t, code.CodeTypeOK, resQuery.Code)
 	require.Equal(t, value, string(resQuery.Value))
 
 	// make sure proof is fine
@@ -36,11 +39,12 @@ func testDummy(t *testing.T, app types.Application, tx []byte, key, value string
 		Data:  []byte(key),
 		Prove: true,
 	})
-	require.Equal(t, types.CodeType_OK, resQuery.Code)
+	require.EqualValues(t, code.CodeTypeOK, resQuery.Code)
 	require.Equal(t, value, string(resQuery.Value))
-	proof, err := merkle.ReadProof(resQuery.Proof)
+	proof, err := iavl.ReadKeyExistsProof(resQuery.Proof)
 	require.Nil(t, err)
-	require.True(t, proof.Verify([]byte(key), resQuery.Value, proof.RootHash)) // NOTE: we have no way to verify the RootHash
+	err = proof.Verify([]byte(key), resQuery.Value, proof.RootHash)
+	require.Nil(t, err, "%+v", err) // NOTE: we have no way to verify the RootHash
 }
 
 func TestDummyKV(t *testing.T) {
@@ -77,24 +81,25 @@ func TestPersistentDummyInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 	dummy := NewPersistentDummyApplication(dir)
-	height := uint64(0)
+	InitDummy(dummy)
+	height := int64(0)
 
-	resInfo := dummy.Info()
+	resInfo := dummy.Info(types.RequestInfo{})
 	if resInfo.LastBlockHeight != height {
 		t.Fatalf("expected height of %d, got %d", height, resInfo.LastBlockHeight)
 	}
 
 	// make and apply block
-	height = uint64(1)
+	height = int64(1)
 	hash := []byte("foo")
 	header := &types.Header{
-		Height: uint64(height),
+		Height: int64(height),
 	}
-	dummy.BeginBlock(hash, header)
-	dummy.EndBlock(height)
+	dummy.BeginBlock(types.RequestBeginBlock{hash, header, nil, nil})
+	dummy.EndBlock(types.RequestEndBlock{header.Height})
 	dummy.Commit()
 
-	resInfo = dummy.Info()
+	resInfo = dummy.Info(types.RequestInfo{})
 	if resInfo.LastBlockHeight != height {
 		t.Fatalf("expected height of %d, got %d", height, resInfo.LastBlockHeight)
 	}
@@ -102,7 +107,7 @@ func TestPersistentDummyInfo(t *testing.T) {
 }
 
 // add a validator, remove a validator, update a validator
-func TestValSetChanges(t *testing.T) {
+func TestValUpdates(t *testing.T) {
 	dir, err := ioutil.TempDir("/tmp", "abci-dummy-test") // TODO
 	if err != nil {
 		t.Fatal(err)
@@ -112,14 +117,9 @@ func TestValSetChanges(t *testing.T) {
 	// init with some validators
 	total := 10
 	nInit := 5
-	vals := make([]*types.Validator, total)
-	for i := 0; i < total; i++ {
-		pubkey := crypto.GenPrivKeyEd25519FromSecret([]byte(cmn.Fmt("test%d", i))).PubKey().Bytes()
-		power := cmn.RandInt()
-		vals[i] = &types.Validator{pubkey, uint64(power)}
-	}
+	vals := RandVals(total)
 	// iniitalize with the first nInit
-	dummy.InitChain(vals[:nInit])
+	dummy.InitChain(types.RequestInitChain{vals[:nInit]})
 
 	vals1, vals2 := vals[:nInit], dummy.Validators()
 	valsEqual(t, vals1, vals2)
@@ -165,7 +165,7 @@ func TestValSetChanges(t *testing.T) {
 
 	makeApplyBlock(t, dummy, 3, diff, tx1)
 
-	vals1 = append([]*types.Validator{v1}, vals1[1:len(vals1)]...)
+	vals1 = append([]*types.Validator{v1}, vals1[1:]...)
 	vals2 = dummy.Validators()
 	valsEqual(t, vals1, vals2)
 
@@ -173,22 +173,22 @@ func TestValSetChanges(t *testing.T) {
 
 func makeApplyBlock(t *testing.T, dummy types.Application, heightInt int, diff []*types.Validator, txs ...[]byte) {
 	// make and apply block
-	height := uint64(heightInt)
+	height := int64(heightInt)
 	hash := []byte("foo")
 	header := &types.Header{
 		Height: height,
 	}
 
-	dummy.BeginBlock(hash, header)
+	dummy.BeginBlock(types.RequestBeginBlock{hash, header, nil, nil})
 	for _, tx := range txs {
 		if r := dummy.DeliverTx(tx); r.IsErr() {
 			t.Fatal(r)
 		}
 	}
-	resEndBlock := dummy.EndBlock(height)
+	resEndBlock := dummy.EndBlock(types.RequestEndBlock{header.Height})
 	dummy.Commit()
 
-	valsEqual(t, diff, resEndBlock.Diffs)
+	valsEqual(t, diff, resEndBlock.ValidatorUpdates)
 
 }
 
@@ -211,38 +211,44 @@ func valsEqual(t *testing.T, vals1, vals2 []*types.Validator) {
 func makeSocketClientServer(app types.Application, name string) (abcicli.Client, cmn.Service, error) {
 	// Start the listener
 	socket := cmn.Fmt("unix://%s.sock", name)
-	server, err := server.NewSocketServer(socket, app)
-	if err != nil {
+	logger := log.TestingLogger()
+
+	server := abciserver.NewSocketServer(socket, app)
+	server.SetLogger(logger.With("module", "abci-server"))
+	if err := server.Start(); err != nil {
 		return nil, nil, err
 	}
 
 	// Connect to the socket
-	client, err := abcicli.NewSocketClient(socket, false)
-	if err != nil {
+	client := abcicli.NewSocketClient(socket, false)
+	client.SetLogger(logger.With("module", "abci-client"))
+	if err := client.Start(); err != nil {
 		server.Stop()
 		return nil, nil, err
 	}
-	client.Start()
 
-	return client, server, err
+	return client, server, nil
 }
 
 func makeGRPCClientServer(app types.Application, name string) (abcicli.Client, cmn.Service, error) {
 	// Start the listener
 	socket := cmn.Fmt("unix://%s.sock", name)
+	logger := log.TestingLogger()
 
 	gapp := types.NewGRPCApplication(app)
-	server, err := server.NewGRPCServer(socket, gapp)
-	if err != nil {
+	server := abciserver.NewGRPCServer(socket, gapp)
+	server.SetLogger(logger.With("module", "abci-server"))
+	if err := server.Start(); err != nil {
 		return nil, nil, err
 	}
 
-	client, err := abcicli.NewGRPCClient(socket, true)
-	if err != nil {
+	client := abcicli.NewGRPCClient(socket, true)
+	client.SetLogger(logger.With("module", "abci-client"))
+	if err := client.Start(); err != nil {
 		server.Stop()
 		return nil, nil, err
 	}
-	return client, server, err
+	return client, server, nil
 }
 
 func TestClientServer(t *testing.T) {
@@ -278,10 +284,12 @@ func runClientTests(t *testing.T, client abcicli.Client) {
 }
 
 func testClient(t *testing.T, app abcicli.Client, tx []byte, key, value string) {
-	ar := app.DeliverTxSync(tx)
+	ar, err := app.DeliverTxSync(tx)
+	require.NoError(t, err)
 	require.False(t, ar.IsErr(), ar)
 	// repeating tx doesn't raise error
-	ar = app.DeliverTxSync(tx)
+	ar, err = app.DeliverTxSync(tx)
+	require.NoError(t, err)
 	require.False(t, ar.IsErr(), ar)
 
 	// make sure query is fine
@@ -290,7 +298,7 @@ func testClient(t *testing.T, app abcicli.Client, tx []byte, key, value string) 
 		Data: []byte(key),
 	})
 	require.Nil(t, err)
-	require.Equal(t, types.CodeType_OK, resQuery.Code)
+	require.Equal(t, code.CodeTypeOK, resQuery.Code)
 	require.Equal(t, value, string(resQuery.Value))
 
 	// make sure proof is fine
@@ -300,9 +308,10 @@ func testClient(t *testing.T, app abcicli.Client, tx []byte, key, value string) 
 		Prove: true,
 	})
 	require.Nil(t, err)
-	require.Equal(t, types.CodeType_OK, resQuery.Code)
+	require.Equal(t, code.CodeTypeOK, resQuery.Code)
 	require.Equal(t, value, string(resQuery.Value))
-	proof, err := merkle.ReadProof(resQuery.Proof)
+	proof, err := iavl.ReadKeyExistsProof(resQuery.Proof)
 	require.Nil(t, err)
-	require.True(t, proof.Verify([]byte(key), resQuery.Value, proof.RootHash)) // NOTE: we have no way to verify the RootHash
+	err = proof.Verify([]byte(key), resQuery.Value, proof.RootHash)
+	require.Nil(t, err, "%+v", err) // NOTE: we have no way to verify the RootHash
 }
