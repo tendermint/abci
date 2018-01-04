@@ -4,7 +4,9 @@ commit
 deliver_tx "abc"
 info
 commit
+endblock 0
 query "abc"
 deliver_tx "def=xyz"
 commit
 query "def"
+endblock 1

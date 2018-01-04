@@ -6,3 +6,5 @@ check_tx 0x00
 deliver_tx 0x01
 deliver_tx 0x04
 info
+endblock 0
+endblock 1
