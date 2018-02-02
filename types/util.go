@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 )
 
 //------------------------------------------------------------------------------
@@ -40,4 +41,21 @@ func ValidatorsString(vs Validators) string {
 type validatorPretty struct {
 	PubKey []byte `json:"pub_key"`
 	Power  int64  `json:"power"`
+}
+
+//------------------------------------------------------------------------------
+
+// byteReader implements ByteRead for a generic io.Reader
+// so we can parse the leading varint specifying the length
+// of incoming protobuf messages
+type byteReader struct {
+	r io.Reader
+}
+
+var _ io.ByteReader = byteReader{}
+
+func (b byteReader) ReadByte() (byte, error) {
+	res := make([]byte, 1)
+	_, err := b.r.Read(res)
+	return res[0], err
 }

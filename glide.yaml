@@ -1,33 +1,35 @@
 package: github.com/tendermint/abci
 import:
 - package: github.com/gogo/protobuf
-  version: v0.5
+  version: ^1.0.0
   subpackages:
+  - gogoproto
+  - jsonpb
   - proto
+- package: github.com/pkg/errors
+  version: ^0.8.0
 - package: github.com/spf13/cobra
-  version: v0.0.1
+  version: ^0.0.1
 - package: github.com/tendermint/go-crypto
-  version: develop
+  version: 45b71f7d11214c35ae63dfb81f42c0da8db9e69e
 - package: github.com/tendermint/go-wire
   version: develop
-  subpackages:
-  - data
 - package: github.com/tendermint/iavl
-  version: sdk2
+  version: af6896e646a30733615a9b85364ec73396e5a6a5
 - package: github.com/tendermint/tmlibs
-  version: develop
+  version: cbc63518e589d6b0069f9750127fa83dd6ea5ee3
   subpackages:
   - common
   - db
   - log
-  - process
 - package: golang.org/x/net
   subpackages:
   - context
 - package: google.golang.org/grpc
-  version: v1.7.3
+  version: ^1.9.2
 testImport:
 - package: github.com/stretchr/testify
+  version: ^1.2.1
   subpackages:
   - assert
   - require
