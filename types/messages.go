@@ -17,11 +17,12 @@ func WriteMessage(msg proto.Message, w io.Writer) error {
 
 // ReadMessage reads a length delimited protobuf message.
 func ReadMessage(r io.Reader, msg proto.Message) error {
-	n, err := binary.ReadVarint(r)
+	n, err := binary.ReadVarint(byteReader{r})
 	if err != nil {
 		return err
 	}
-	bz, err = r.Read(int(n))
+	bz := make([]byte, int(n))
+	_, err = r.Read(bz)
 	if err != nil {
 		return err
 	}
