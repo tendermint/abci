@@ -1,10 +1,14 @@
-hash: 1fbe2d780f4901d78d2e986a694e6335ae07715317c7d680db64e1d69f08aff7
-updated: 2018-01-05T22:07:26.119496005-05:00
+hash: 9c360c96e2656754964d0e22512f1313abf960ef9eeffad40e11ba6326d686a3
+updated: 2018-02-02T14:34:39.042159+01:00
 imports:
 - name: github.com/btcsuite/btcd
   version: c7588cbf7690cd9f047a28efa2dcd8f2435a4e5e
   subpackages:
   - btcec
+- name: github.com/davecgh/go-spew
+  version: 04cdfd42973bb9c8589fd6a731800cf222fde1a9
+  subpackages:
+  - spew
 - name: github.com/go-kit/kit
   version: e2b298466b32c7cd5579a9b9b07e968fc9d9452c
   subpackages:
@@ -67,15 +71,13 @@ imports:
   - edwards25519
   - extra25519
 - name: github.com/tendermint/go-crypto
-  version: 3ebe3250ff67e8af92f00ec3dc427c14a7eb1066
+  version: 12142af1cb4e3479ea4ac98a3171debff87519c6
 - name: github.com/tendermint/go-wire
-  version: 27be46e25124ddf775e23317a83647ce62a93f6b
-  subpackages:
-  - data
+  version: e723d95ac2838b7ae9919ada25004859236c32ff
 - name: github.com/tendermint/iavl
-  version: ed0bbf0acc51e75f72c76099293113c2d67199b9
+  version: babf6f051a5ca00b1760234e7967ac6ec1d00f87
 - name: github.com/tendermint/tmlibs
-  version: 1afc0340069d38e71f137bc9e4fa4fadf12f76df
+  version: 95b53c80e1771be6b8c7083771a417e2a888c765
   subpackages:
   - common
   - db
@@ -131,16 +133,12 @@ imports:
   - tap
   - transport
 testImports:
-- name: github.com/davecgh/go-spew
-  version: 04cdfd42973bb9c8589fd6a731800cf222fde1a9
-  subpackages:
-  - spew
 - name: github.com/pmezard/go-difflib
   version: d8ed2627bdf02c080bf22230dbb337003b7aba2d
   subpackages:
   - difflib
 - name: github.com/stretchr/testify
-  version: 2aa2c176b9dab406a6970f6a55f513e8a8c8b18f
+  version: 12b6f73e6084dad08a7c6e575284b177ecafbc71
   subpackages:
   - assert
   - require
