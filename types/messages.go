@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/binary"
 	"io"
 
 	"github.com/gogo/protobuf/proto"
@@ -10,19 +11,17 @@ import (
 // WriteMessage writes a length-delimited protobuf message.
 func WriteMessage(msg proto.Message, w io.Writer) error {
 	bz, err := proto.Marshal(msg)
-	if err != nil {
-		return err
-	}
-	var n int
-	wire.WriteByteSlice(bz, w, &n, &err)
+	err = wire.EncodeByteSlice(w, bz)
 	return err
 }
 
 // ReadMessage reads a length delimited protobuf message.
 func ReadMessage(r io.Reader, msg proto.Message) error {
-	var n int
-	var err error
-	bz := wire.ReadByteSlice(r, 0, &n, &err) //XXX: no max
+	n, err := binary.ReadVarint(r)
+	if err != nil {
+		return err
+	}
+	bz, err = r.Read(int(n))
 	if err != nil {
 		return err
 	}
