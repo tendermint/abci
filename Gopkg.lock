@@ -137,7 +137,7 @@
     "db",
     "log"
   ]
-  revision = "87c0473730a7fd6f97e9f8be3cfeeaa21102fa41"
+  revision = "e9cf47606cfcbdc28a7c16671b4a70b459e9d4cc"
   version = "v0.8.0-dev"
 
 [[projects]]
@@ -179,7 +179,7 @@
   branch = "master"
   name = "google.golang.org/genproto"
   packages = ["googleapis/rpc/status"]
-  revision = "f8c8703595236ae70fdf8789ecb656ea0bcdcf46"
+  revision = "ab0870e398d5dd054b868c0db1481ab029b9a9f2"
 
 [[projects]]
   name = "google.golang.org/grpc"
