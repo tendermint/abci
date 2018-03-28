@@ -74,7 +74,7 @@ jobs:
       - run:
           name: Run test cover
           command: |
-            for pkg in $(go list github.com/tendermint/tendermint/... | grep -v /vendor/ | circleci tests split --split-by=timings); do
+            for pkg in $(go list github.com/tendermint/abci/... | grep -v /vendor/ | circleci tests split --split-by=timings); do
               id=$(basename "$pkg")
               go test -timeout 5m -race -coverprofile=/tmp/workspace/profiles/$id.out -covermode=atomic "$pkg"
             done
