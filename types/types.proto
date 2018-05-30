@@ -241,8 +241,12 @@ message Validator {
   int64 power = 2;
 }
 
+enum EvidenceType {
+  DOUBLE_SIGN = 0;
+};
+
 message Evidence {
-  bytes type = 1;
+  EvidenceType type = 1;
   bytes pub_key = 2;
   int64 height = 3;
   int64 time = 4;
