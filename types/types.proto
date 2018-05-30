@@ -246,8 +246,12 @@ message PubKey {
   bytes  data = 2;
 }
 
+enum EvidenceType {
+  DOUBLE_SIGN = 0;
+};
+
 message Evidence {
-  string type = 1;
+  EvidenceType type = 1;
   Validator validator = 2;
   int64 height = 3;
   int64 time = 4;
