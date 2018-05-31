@@ -20,8 +20,8 @@ func InitChain(client abcicli.Client) error {
 		vals[i] = &v
 	}
 	_, err := client.InitChainSync(types.RequestInitChain{
-		Validators:   vals,
-		GenesisBytes: []byte("{}"),
+		Validators:  vals,
+		GenesisFile: &types.GenesisFile{},
 	})
 	if err != nil {
 		fmt.Printf("Failed test: InitChain - %v\n", err)

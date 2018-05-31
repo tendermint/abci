@@ -30,8 +30,8 @@ func ToParamsSetOption(req RequestSetOption) ParamsSetOption {
 }
 
 type ParamsInitChain struct {
-	Validators   []Validator `json:"validators"`
-	GenesisBytes []byte      `json:"genesis_bytes,omitempty"`
+	Validators  []Validator `json:"validators"`
+	GenesisFile GenesisFile `json:"genesis_bytes,omitempty"`
 }
 
 func ToParamsInitChain(req RequestInitChain) ParamsInitChain {
@@ -41,8 +41,8 @@ func ToParamsInitChain(req RequestInitChain) ParamsInitChain {
 		vals[i] = *v
 	}
 	return ParamsInitChain{
-		Validators:   vals,
-		GenesisBytes: req.GenesisBytes,
+		Validators:  vals,
+		GenesisFile: *req.GenesisFile,
 	}
 }
 
